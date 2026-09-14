@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include <unistd.h>
 
-#define CHIP_PATH "/dev/gpiochip4" // En RPi OS v2 suele ser gpiochip4 o /dev/gpiochip0
+#define CHIP_PATH "/dev/gpiochip0" // En RPi OS v2 suele ser gpiochip4 o /dev/gpiochip0
 #define N_LEDS 4
 
 int main(void) {
