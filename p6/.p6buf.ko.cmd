@@ -1,0 +1,1 @@
+savedcmd_p6buf.ko := arm-linux-gnueabihf-ld -r -EL -z noexecstack --no-warn-rwx-segments --build-id=sha1  -T /usr/src/linux-headers-6.18.39+rpt-rpi-v7/arch/arm/module.lds -o p6buf.ko p6buf.o p6buf.mod.o .module-common.o

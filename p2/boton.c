@@ -33,6 +33,6 @@ int main(void) {
     while (1) {
         int estado = gpiod_line_request_get_value(lines, pins[0]);
         gpiod_line_request_set_value(lines, pins[1], estado);
-        usleep(10000);
+        //usleep(10000);
     }
 }

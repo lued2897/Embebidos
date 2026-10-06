@@ -1,0 +1,1 @@
+savedcmd_Module.symvers :=  /usr/src/linux-headers-6.18.39+rpt-rpi-v7/scripts/mod/modpost -M -m -b  -a      -o Module.symvers -n -T modules.order -i /usr/src/linux-headers-6.18.39+rpt-rpi-v7/Module.symvers -e 

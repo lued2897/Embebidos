@@ -1,0 +1,1 @@
+savedcmd_p6cnt.ko := arm-linux-gnueabihf-ld -r -EL -z noexecstack --no-warn-rwx-segments --build-id=sha1  -T /usr/src/linux-headers-6.18.39+rpt-rpi-v7/arch/arm/module.lds -o p6cnt.ko p6cnt.o p6cnt.mod.o .module-common.o
