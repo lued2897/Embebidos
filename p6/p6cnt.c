@@ -44,9 +44,6 @@ static ssize_t p6_write(struct file *f, const char __user *src,
 	char buf[TAM_BUF];
 	size_t len;
 
-	/*
-	 * Necesitamos espacio para el contenido recibido y el '\0'.
-	 */
 	if (n >= TAM_BUF)
 		return -EINVAL;
 
@@ -55,9 +52,6 @@ static ssize_t p6_write(struct file *f, const char __user *src,
 
 	buf[n] = '\0';
 
-	/*
-	 * Se permite "reset" y "reset\n".
-	 */
 	len = n;
 
 	if (len > 0 && buf[len - 1] == '\n')
