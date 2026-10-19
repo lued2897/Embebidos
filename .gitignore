@@ -14,3 +14,5 @@ b_*
 *.s
 *.o
 FIN
+*.zip
+*.txt
