@@ -10,7 +10,6 @@ typedef struct {
 	gpio_regs_t *gpio;
 	int fd_i2c;
 	int fd_spi;
-	struct bmp_calib calib;
 } hw_t;
 
 static const unsigned hw_pines_led[4] = {LED_1, LED_2, LED_3, LED_4};
@@ -32,9 +31,13 @@ static uint32_t hw_campo(gpio_regs_t *gpio, unsigned pin)
 	return (gpio->GPFSEL[pin / 10] >> ((pin % 10) * 3)) & 0x7u;
 }
 
-static int hw_abrir(hw_t *h, int direccion_bmp)
+/* direccion_i2c: se ignora si es la del BMP280 (0x76/0x77) y se usa 0x68 */
+static int hw_abrir(hw_t *h, int direccion_i2c)
 {
 	uint8_t modo = SPI_MODE_0;
+
+	if (direccion_i2c != DS3231_DIR)
+		direccion_i2c = DS3231_DIR;
 
 	h->gpio = gpio_abrir();
 	h->fd_i2c = open("/dev/i2c-1", O_RDWR);
@@ -43,7 +46,7 @@ static int hw_abrir(hw_t *h, int direccion_bmp)
 		perror("open");
 		return -1;
 	}
-	if (ioctl(h->fd_i2c, I2C_SLAVE, direccion_bmp) < 0) {
+	if (ioctl(h->fd_i2c, I2C_SLAVE, direccion_i2c) < 0) {
 		perror("ioctl I2C_SLAVE");
 		return -1;
 	}
@@ -51,8 +54,8 @@ static int hw_abrir(hw_t *h, int direccion_bmp)
 		perror("ioctl SPI_IOC_WR_MODE");
 		return -1;
 	}
-	if (bmp_calibracion(h->fd_i2c, &h->calib) < 0 || bmp_iniciar(h->fd_i2c) < 0) {
-		fprintf(stderr, "No responde el BMP280 en 0x%02X\n", direccion_bmp);
+	if (ds3231_iniciar(h->fd_i2c) < 0) {
+		fprintf(stderr, "No responde el DS3231 en 0x%02X\n", direccion_i2c);
 		return -1;
 	}
 	for (int i = 0; i < 4; i++)
@@ -64,12 +67,7 @@ static int hw_abrir(hw_t *h, int direccion_bmp)
 
 static int hw_temp(hw_t *h, int32_t *temp_c100)
 {
-	uint8_t t[3];
-
-	if (bmp_leer_registros(h->fd_i2c, BMP_REG_TEMP, t, sizeof(t)) < 0)
-		return -1;
-	*temp_c100 = bmp_compensar(&h->calib, bmp_temperatura_cruda(t));
-	return 0;
+	return ds3231_leer_temp_c100(h->fd_i2c, temp_c100);
 }
 
 static int hw_pot(hw_t *h, unsigned *valor)

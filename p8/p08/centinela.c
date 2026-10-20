@@ -22,7 +22,7 @@
 #include "hw.h"
 
 /* Periodos del programa. Se pueden cambiar entre 1 y el maximo de centinela_cfg.h. */
-#define PERIODO_BOTONES_MS 20
+#define PERIODO_BOTONES_MS 50
 #define PERIODO_SENSOR_MS  250
 
 _Static_assert(PERIODO_BOTONES_MS >= 1 && PERIODO_BOTONES_MS <= MAX_BOTONES_MS,
