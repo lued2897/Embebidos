@@ -293,7 +293,7 @@ static int tipos_fs(const char *proc_mounts, char *dst, size_t n)
         p = strchr(p, '\n');
         if (p) p++;
     }
-    printf("%.*s\n", buf_len, buffer);
+    //printf("%.*s\n", buf_len, buffer);
     if (buf_len >= n) return -1;
     strcpy(dst, buffer);
     return cantidad;
