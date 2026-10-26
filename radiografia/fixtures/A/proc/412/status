@@ -1,0 +1,23 @@
+Name:	systemd-journal
+Umask:	0022
+State:	S (sleeping)
+Tgid:	412
+Ngid:	0
+Pid:	412
+PPid:	1
+TracerPid:	0
+Uid:	1000	1000	1000	1000
+Gid:	1000	1000	1000	1000
+FDSize:	64
+VmPeak:	   55680 kB
+VmSize:	   55480 kB
+VmLck:	       0 kB
+VmHWM:	   18860 kB
+VmRSS:	   18560 kB
+RssAnon:	    9280 kB
+RssFile:	    6186 kB
+VmData:	   18560 kB
+VmStk:	     132 kB
+Threads:	1
+voluntary_ctxt_switches:	412
+nonvoluntary_ctxt_switches:	9

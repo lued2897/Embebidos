@@ -1,0 +1,23 @@
+Name:	NetworkManager
+Umask:	0022
+State:	S (sleeping)
+Tgid:	615
+Ngid:	0
+Pid:	615
+PPid:	1
+TracerPid:	0
+Uid:	1000	1000	1000	1000
+Gid:	1000	1000	1000	1000
+FDSize:	64
+VmPeak:	   37440 kB
+VmSize:	   37240 kB
+VmLck:	       0 kB
+VmHWM:	   12780 kB
+VmRSS:	   12480 kB
+RssAnon:	    6240 kB
+RssFile:	    4160 kB
+VmData:	   12480 kB
+VmStk:	     132 kB
+Threads:	1
+voluntary_ctxt_switches:	412
+nonvoluntary_ctxt_switches:	9

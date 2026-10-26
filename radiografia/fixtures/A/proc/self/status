@@ -1,0 +1,23 @@
+Name:	radiografia
+Umask:	0022
+State:	S (sleeping)
+Tgid:	99999
+Ngid:	0
+Pid:	99999
+PPid:	1
+TracerPid:	0
+Uid:	1000	1000	1000	1000
+Gid:	1000	1000	1000	1000
+FDSize:	64
+VmPeak:	299999997 kB
+VmSize:	299999797 kB
+VmLck:	       0 kB
+VmHWM:	100000299 kB
+VmRSS:	99999999 kB
+RssAnon:	49999999 kB
+RssFile:	33333333 kB
+VmData:	99999999 kB
+VmStk:	     132 kB
+Threads:	1
+voluntary_ctxt_switches:	412
+nonvoluntary_ctxt_switches:	9
