@@ -1,0 +1,12 @@
+[Unit]
+Description=Cerradura - proceso de control
+After=multi-user.target
+
+[Service]
+WorkingDirectory=/opt/cerradura
+ExecStart=/opt/cerradura/venv/bin/python control.py
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,13 @@
+[Unit]
+Description=Cerradura - proceso de entradas (huella, RFID, teclado, reed)
+After=cerradura-control.service
+Requires=cerradura-control.service
+
+[Service]
+WorkingDirectory=/opt/cerradura
+ExecStart=/opt/cerradura/venv/bin/python entradas.py
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
