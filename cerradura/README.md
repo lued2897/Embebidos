@@ -2,14 +2,7 @@
 
 Raspberry Pi 3B · Raspberry Pi OS · Python 3
 
-```
- Huella AS608 ──UART──┐
- RFID RC522 ───SPI────┤                       socket UNIX (FIFO)
- Teclado 4x4 ──GPIO───┼─► entradas.py ───────────────────────────► control.py ──I2C──► PCA9685 ──► Servo
- Reed MC-38 ───GPIO───┘        │                                     │   │
-                               └──── cola de mensajes POSIX ─────────┘   ├──I2C──► LCD 20x4
-                                     (estado de la puerta)               └──► SQLite (usuarios + logs)
-```
+![Alt Text](img/diagrama.jpg)
 
 | Archivo | Función |
 |---|---|
@@ -37,7 +30,7 @@ Raspberry Pi 3B · Raspberry Pi OS · Python 3
 | **PCA9685** | VCC / GND | 3.3V (1) / GND (14) |
 | | SDA / SCL | GPIO2 (3) / GPIO3 (5) |
 | | V+ (servo) | **Fuente externa 5V** (GND común con la Pi) |
-| | Canal 0 | Señal del servo |
+| | Canal 15 | Señal del servo |
 | **LCD 2004 + PCF8574** | VCC / GND | 5V (2) / GND (25) |
 | | SDA / SCL | GPIO2 (3) / GPIO3 (5) |
 
@@ -51,8 +44,6 @@ sudo ./instalar.sh
 sudo reboot
 i2cdetect -y 1  
 ```
-
-Si el LCD sale en `3f`, cambia `LCD_ADDR = 0x3F` en `config.py`.
 
 ## Registrar usuarios
 
