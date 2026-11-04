@@ -39,7 +39,7 @@ RFID_COOLDOWN_S = 3                  # ignora la misma tarjeta durante 3 s
 # ---------------- I2C ----------------
 I2C_BUS = 1
 PCA9685_ADDR = 0x40
-SERVO_CANAL = 0
+SERVO_CANAL = 15
 # PWM 12 bits a 50 Hz: 20 ms / 4096 cuentas
 SERVO_CERRAR = 205                   # 1.0 ms
 SERVO_ABRIR = 410                    # 2.0 ms

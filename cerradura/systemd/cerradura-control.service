@@ -1,6 +1,6 @@
 [Unit]
 Description=Cerradura - proceso de control
-After=multi-user.target
+After=local-fs.target
 
 [Service]
 WorkingDirectory=/opt/cerradura
