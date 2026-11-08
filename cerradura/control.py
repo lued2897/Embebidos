@@ -56,10 +56,15 @@ class Control:
                 log.error("LCD no encontrado (%s), sigo sin display", e)
                 self.lcd = LCDSim()
 
-        self.mutex = threading.Lock()                 # protege estado_puerta
+        # Bitácora clase 9: un mutex protege el estado de la puerta, que comparten
+        # el hilo del socket, el hilo del reed y el hilo que vuelve a cerrar.
+        self.mutex = threading.Lock()
         self.cambio_puerta = threading.Condition(self.mutex)
         self.estado_puerta = "desconocido"
-        self.servo_lock = threading.Lock()
+        # Bitácora clase 9: el servo es el recurso crítico. Un solo candado cubre la
+        # escritura al PCA9685 y la bandera "desbloqueada", para que abrir y volver a
+        # cerrar nunca se intercalen.
+        self.servo_lock = threading.RLock()
         self.desbloqueada = False
         self.fallos = 0
         self.bloqueado_hasta = 0.0
@@ -70,6 +75,7 @@ class Control:
 
     # ------------------------------------------------ actuadores
     def _mover(self, abrir):
+        # Bitácora clase 9 y 12: solo este proceso escribe al driver I2C del servo.
         with self.servo_lock:
             self.servo.set_pwm(config.SERVO_CANAL, config.SERVO_ABRIR if abrir else config.SERVO_CERRAR)
 
@@ -92,10 +98,11 @@ class Control:
 
     # ------------------------------------------------ apertura
     def abrir(self, usuario, metodo):
-        if not self.desbloqueada:
-            self.desbloqueada = True
-            self._mover(abrir=True)
-            threading.Thread(target=self._volver_a_cerrar, daemon=True).start()
+        with self.servo_lock:
+            if not self.desbloqueada:
+                self.desbloqueada = True
+                self._mover(abrir=True)
+                threading.Thread(target=self._volver_a_cerrar, name="cierre", daemon=True).start()
         db.log(self.con, metodo, "concedido", usuario)
         self.mensaje("ACCESO CONCEDIDO", f"Hola, {usuario}", "", "Puede pasar")
 
@@ -107,8 +114,9 @@ class Control:
                 self.cambio_puerta.wait_for(lambda: self.estado_puerta == "cerrada")
         if abrio:
             time.sleep(1)
-        self._mover(abrir=False)
-        self.desbloqueada = False
+        with self.servo_lock:
+            self._mover(abrir=False)
+            self.desbloqueada = False
         db.log(self.con, "sistema", "cerradura bloqueada", detalle="puerta usada" if abrio else "tiempo agotado")
         log.info("cerradura bloqueada")
 
@@ -133,7 +141,7 @@ class Control:
             self.fallos = 0
             self.bloqueado_hasta = ahora + config.BLOQUEO_S
             db.log(self.con, "sistema", "bloqueo temporal", detalle=f"{config.MAX_INTENTOS} intentos fallidos")
-            self.mensaje("SISTEMA BLOQUEADO", f"Demasiados intentos", f"Espere {config.BLOQUEO_S} s",
+            self.mensaje("SISTEMA BLOQUEADO", "Demasiados intentos", f"Espere {config.BLOQUEO_S} s",
                          duracion=config.BLOQUEO_S)
             return {"ok": False, "motivo": "bloqueado", "segundos": config.BLOQUEO_S}
         self.mensaje("ACCESO DENEGADO", "Credencial invalida", "",
@@ -164,6 +172,7 @@ class Control:
 
     # ------------------------------------------------ hilo del reed switch
     def hilo_puerta(self):
+        # Bitácora clase 11: el estado de la puerta llega por una cola de mensajes POSIX.
         cola = ipc.cola_puerta()
         while True:
             msg, _ = cola.receive()
@@ -194,6 +203,7 @@ class Control:
         threading.Thread(target=self.hilo_puerta, name="reed", daemon=True).start()
         if os.path.exists(config.SOCKET_PATH):
             os.unlink(config.SOCKET_PATH)
+        # Bitácora clase 11: socket UNIX; las solicitudes se atienden una por una (FIFO).
         srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         srv.bind(config.SOCKET_PATH)
         os.chmod(config.SOCKET_PATH, 0o660)
