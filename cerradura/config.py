@@ -27,7 +27,7 @@ PIN_TIMEOUT_S = 10                   # se borra lo tecleado tras 10 s sin teclas
 REED_GPIO = 17
 
 # ---------------- UART: huella AS608 ----------------
-HUELLA_ACTIVA = False                
+HUELLA_ACTIVA = True                
 HUELLA_PUERTO = "/dev/serial0"
 HUELLA_BAUD = 57600
 
