@@ -71,7 +71,7 @@ def tarea_rfid():
             uid = lector.leer_uid()
             ahora = time.monotonic()
             if uid and not (uid == ultimo and ahora - t_ultimo < config.RFID_COOLDOWN_S):
-                autenticar("rfid", uid, time.time())
+                autenticar("rfid", uid)
                 ultimo = uid
             if uid:
                 t_ultimo = ahora
