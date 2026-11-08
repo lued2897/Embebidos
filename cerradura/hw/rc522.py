@@ -1,3 +1,8 @@
+"""Driver mínimo del lector RFID MFRC522 (13.56 MHz) por SPI con spidev.
+
+Solo lee el UID de la tarjeta. El RST del módulo va a 3.3 V y el chip se
+reinicia por software (SoftReset) al crear el objeto.
+"""
 import time
 import spidev
 
@@ -68,6 +73,10 @@ class RC522:
         bits = (nivel - 1) * 8 + ultimos if ultimos else nivel * 8
         nivel = max(1, min(nivel, 16))
         return status, [self._r(FIFODataReg) for _ in range(nivel)], bits
+
+    def version(self):
+        """VersionReg (0x37): 0x91/0x92 en el chip original, 0xB2 en clones; 0x00 o 0xFF = sin respuesta."""
+        return self._r(0x37)
 
     def leer_uid(self):
         """Devuelve el UID como texto hex ('A1B2C3D4') o None si no hay tarjeta."""

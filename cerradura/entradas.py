@@ -61,17 +61,29 @@ def tarea_huella():
 def tarea_rfid():
     from hw.rc522 import RC522
     lector = RC522(config.RFID_SPI_BUS, config.RFID_SPI_DEV)
-    log.info("RFID listo")
-    ultimo, t_ultimo = None, 0.0
-    while True:
-        uid = lector.leer_uid()
-        ahora = time.monotonic()
-        if uid and not (uid == ultimo and ahora - t_ultimo < config.RFID_COOLDOWN_S):
-            autenticar("rfid", uid)
-            ultimo = uid
-        if uid:
-            t_ultimo = ahora
-        time.sleep(0.1)                             # sondeo cada 100 ms
+    try:
+        version = lector.version()
+        if version in (0x00, 0xFF):
+            raise RuntimeError(f"RC522 no responde (VersionReg=0x{version:02X})")
+        log.info("RFID listo (VersionReg=0x%02X)", version)
+        ultimo, t_ultimo, t_salud = None, 0.0, time.monotonic()
+        while True:
+            uid = lector.leer_uid()
+            ahora = time.monotonic()
+            if uid and not (uid == ultimo and ahora - t_ultimo < config.RFID_COOLDOWN_S):
+                autenticar("rfid", uid, time.time())
+                ultimo = uid
+            if uid:
+                t_ultimo = ahora
+            # Detecta lector desconectado
+            if ahora - t_salud > config.RFID_SALUD_S:
+                t_salud = ahora
+                version = lector.version()
+                if version in (0x00, 0xFF):
+                    raise RuntimeError(f"RC522 dejo de responder (VersionReg=0x{version:02X})")
+            time.sleep(0.1)                         # bitácora clase 8: sondeo cada 100 ms
+    finally:
+        lector.close()
 
 
 # ---------------------------------------------------------------- Teclado 4x4

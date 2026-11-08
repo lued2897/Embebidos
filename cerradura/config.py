@@ -6,7 +6,7 @@ DATA_DIR = os.environ.get("CERRADURA_DATA", "/var/lib/cerradura")
 DB_PATH = os.path.join(DATA_DIR, "cerradura.db")
 PEPPER_PATH = os.path.join(DATA_DIR, "pepper.key")   # llave secreta para el hash de PINs
 
-# ---------------- IPC ----------------
+# ---------------- IPC (bitácora clase 11) ----------------
 SOCKET_PATH = "/tmp/cerradura_control.sock"           # entradas/web -> control (FIFO, una solicitud a la vez)
 MQ_PUERTA = "/cerradura_puerta"                       # cola de mensajes POSIX: estado del reed switch
 
@@ -35,16 +35,17 @@ HUELLA_BAUD = 57600
 RFID_SPI_BUS = 0
 RFID_SPI_DEV = 0                     # CE0
 RFID_COOLDOWN_S = 3                  # ignora la misma tarjeta durante 3 s
+RFID_SALUD_S = 2                     # cada 2 s confirma que el lector sigue respondiendo
 
 # ---------------- I2C ----------------
 I2C_BUS = 1
 PCA9685_ADDR = 0x40
 SERVO_CANAL = 15
-# PWM 12 bits a 50 Hz: 20 ms / 4096 cuentas
+# PWM 12 bits a 50 Hz: 20 ms / 4096 cuentas (bitácora clase 12)
 SERVO_CERRAR = 205                   # 1.0 ms
 SERVO_ABRIR = 410                    # 2.0 ms
 
-LCD_ADDR = 0x27                      
+LCD_ADDR = 0x27
 LCD_COLS, LCD_FILAS = 20, 4
 
 # ---------------- Lógica de control ----------------
