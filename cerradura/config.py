@@ -52,6 +52,7 @@ LCD_COLS, LCD_FILAS = 20, 4
 # Valor nice: más bajo = más prioridad. Los de proceso se fijan en los servicios de systemd.
 NICE_CONTROL = -10                   # servo y decisión de apertura: prioridad alta
 NICE_ENTRADAS = -5                   # lectura de sensores: alta
+NICE_HILO_LCD = 10                   # desplazamiento del display: baja
 
 # ---------------- Lógica de control ----------------
 TIEMPO_ABIERTO_S = 8                 # si nadie abre la puerta, se vuelve a cerrar

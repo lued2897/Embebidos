@@ -51,7 +51,8 @@ class Control:
             from hw.lcd import LCD
             self.servo = PCA9685(config.I2C_BUS, config.PCA9685_ADDR)
             try:
-                self.lcd = LCD(config.I2C_BUS, config.LCD_ADDR, config.LCD_COLS, config.LCD_FILAS)
+                self.lcd = LCD(config.I2C_BUS, config.LCD_ADDR, config.LCD_COLS, config.LCD_FILAS,
+                               nice_scroll=config.NICE_HILO_LCD)
             except OSError as e:
                 log.error("LCD no encontrado (%s), sigo sin display", e)
                 self.lcd = LCDSim()

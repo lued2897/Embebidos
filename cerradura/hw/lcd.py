@@ -1,3 +1,4 @@
+import os
 import threading
 import time
 from smbus2 import SMBus
@@ -11,7 +12,8 @@ SCROLL_SEPARADOR = "    "  # espacio entre el final y el reinicio del texto
 
 
 class LCD:
-    def __init__(self, bus=1, addr=0x27, cols=20, filas=4):
+    def __init__(self, bus=1, addr=0x27, cols=20, filas=4, nice_scroll=10):
+        self.nice_scroll = nice_scroll
         self.bus = SMBus(bus)
         self.addr, self.cols, self.filas = addr, cols, filas
         self.lock = threading.Lock()
@@ -58,6 +60,12 @@ class LCD:
         return (ciclo + ciclo)[inicio: inicio + self.cols]
 
     def _hilo_scroll(self):
+        # Bitácora clase 8: el display es de prioridad baja. En Linux el nice es por
+        # hilo, así que este hilo baja su prioridad sin afectar al resto del proceso.
+        try:
+            os.setpriority(os.PRIO_PROCESS, threading.get_native_id(), self.nice_scroll)
+        except OSError:
+            pass
         while True:
             time.sleep(SCROLL_PASO_S)
             with self.lock:
