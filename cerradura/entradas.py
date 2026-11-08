@@ -19,8 +19,11 @@ import ipc
 log = logging.getLogger("entradas")
 
 
-def autenticar(metodo, valor):
-    r = ipc.enviar({"tipo": "auth", "metodo": metodo, "valor": valor})
+def autenticar(metodo, valor, t_lectura=None):
+    """Envía la credencial al control. t_lectura = momento en que el sensor la leyó
+    (sirve para medir el requisito de apertura en menos de 3 s)."""
+    r = ipc.enviar({"tipo": "auth", "metodo": metodo, "valor": valor,
+                    "t": t_lectura or time.time()})
     log.info("%s -> %s", metodo, r)
     return r
 
@@ -50,9 +53,10 @@ def tarea_huella():
         if not f.readImage():
             time.sleep(0.1)
             continue
+        t_lectura = time.time()
         f.convertImage(0x01)
-        posicion, _score = f.searchTemplate()       # -1 si no coincide
-        autenticar("huella", posicion)
+        posicion, _score = f.searchTemplate()       # -1 si no coincide (búsqueda dentro del sensor)
+        autenticar("huella", posicion, t_lectura)
         while f.readImage():                        # espera a que retire el dedo
             time.sleep(0.2)
 
@@ -71,7 +75,7 @@ def tarea_rfid():
             uid = lector.leer_uid()
             ahora = time.monotonic()
             if uid and not (uid == ultimo and ahora - t_ultimo < config.RFID_COOLDOWN_S):
-                autenticar("rfid", uid)
+                autenticar("rfid", uid, time.time())
                 ultimo = uid
             if uid:
                 t_ultimo = ahora
@@ -125,7 +129,7 @@ def _bucle_teclado(escanear):
                 ipc.enviar({"tipo": "pin_progreso", "n": 0})
             elif tecla == "#":
                 if len(pin) >= config.PIN_MIN:
-                    autenticar("pin", pin)
+                    autenticar("pin", pin, time.time())
                 else:
                     ipc.enviar({"tipo": "pin_progreso", "n": 0})
                 pin = ""

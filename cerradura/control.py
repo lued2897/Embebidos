@@ -97,14 +97,23 @@ class Control:
         threading.Thread(target=volver, daemon=True).start()
 
     # ------------------------------------------------ apertura
-    def abrir(self, usuario, metodo):
+    def abrir(self, usuario, metodo, t_lectura=None):
+        """Abre el servo. t_lectura = time.time() del momento en que se leyó la credencial."""
+        detalle = None
         with self.servo_lock:
             if not self.desbloqueada:
                 self.desbloqueada = True
                 self._mover(abrir=True)
+                if t_lectura:
+                    # Medición del requisito "apertura en menos de 3 s" (Avance 1):
+                    # desde que el sensor leyó la credencial hasta la orden al servo.
+                    detalle = f"latencia {(time.time() - t_lectura) * 1000:.1f} ms"
                 threading.Thread(target=self._volver_a_cerrar, name="cierre", daemon=True).start()
-        db.log(self.con, metodo, "concedido", usuario)
+            else:
+                detalle = "ya estaba abierta"
+        db.log(self.con, metodo, "concedido", usuario, detalle)
         self.mensaje("ACCESO CONCEDIDO", f"Hola, {usuario}", "", "Puede pasar")
+        return detalle
 
     def _volver_a_cerrar(self):
         with self.cambio_puerta:
@@ -121,7 +130,7 @@ class Control:
         log.info("cerradura bloqueada")
 
     # ------------------------------------------------ autenticación
-    def autenticar(self, metodo, valor):
+    def autenticar(self, metodo, valor, t_lectura=None):
         ahora = time.monotonic()
         if ahora < self.bloqueado_hasta:
             resta = int(self.bloqueado_hasta - ahora) + 1
@@ -132,8 +141,8 @@ class Control:
         usuario = db.buscar_por(self.con, metodo, valor)
         if usuario:
             self.fallos = 0
-            self.abrir(usuario, metodo)
-            return {"ok": True, "usuario": usuario}
+            detalle = self.abrir(usuario, metodo, t_lectura)
+            return {"ok": True, "usuario": usuario, "detalle": detalle}
 
         self.fallos += 1
         db.log(self.con, metodo, "denegado", detalle=f"credencial no registrada (fallo {self.fallos})")
@@ -152,7 +161,7 @@ class Control:
     def atender(self, msg):
         tipo = msg.get("tipo")
         if tipo == "auth":
-            return self.autenticar(msg.get("metodo"), msg.get("valor"))
+            return self.autenticar(msg.get("metodo"), msg.get("valor"), msg.get("t"))
         if tipo == "pin_progreso":
             n = int(msg.get("n", 0))
             if n:
@@ -160,9 +169,9 @@ class Control:
             else:
                 self.pantalla_espera()
             return {"ok": True}
-        if tipo == "abrir_remoto":                      # lo usará el proceso web
-            self.abrir(msg.get("usuario", "admin"), "remoto")
-            return {"ok": True}
+        if tipo == "abrir_remoto":                      # desde la app web
+            detalle = self.abrir(msg.get("usuario", "admin"), "remoto", msg.get("t"))
+            return {"ok": True, "detalle": detalle}
         if tipo == "estado":
             with self.mutex:
                 puerta = self.estado_puerta

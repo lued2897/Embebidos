@@ -10,6 +10,7 @@
     python3 admin.py logs     [n]
     python3 admin.py abrir                        # apertura remota (prueba del servo)
     python3 admin.py estado
+    python3 admin.py medir    [n]                 # latencia credencial -> servo de las últimas n aperturas
 
 Para 'tarjeta' (sin UID) y 'huella' deténer antes el proceso de entradas: 
     sudo systemctl stop cerradura-entradas
@@ -122,6 +123,19 @@ def main():
 
         elif cmd == "estado":
             print(ipc.enviar({"tipo": "estado"}))
+
+        elif cmd == "medir":
+            import statistics
+            datos = db.latencias(con, int(args[0]) if args else 200)
+            if not datos:
+                sys.exit("No hay aperturas con latencia registrada todavía")
+            ms = sorted(v for _, v in datos)
+            print(f"Aperturas medidas: {len(ms)}")
+            print(f"Mediana: {statistics.median(ms):.1f} ms   Máxima: {ms[-1]:.1f} ms   Mínima: {ms[0]:.1f} ms")
+            for metodo in sorted({m for m, _ in datos}):
+                v = sorted(x for m, x in datos if m == metodo)
+                print(f"  {metodo:<7} n={len(v):<4} mediana {statistics.median(v):7.1f} ms   máx {v[-1]:7.1f} ms")
+            print(f"Requisito del Avance 1: < 3000 ms -> {'CUMPLE' if ms[-1] < 3000 else 'NO CUMPLE'}")
 
         else:
             sys.exit(__doc__)

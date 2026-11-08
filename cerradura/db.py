@@ -137,3 +137,13 @@ def log(con, metodo, resultado, usuario=None, detalle=None):
 
 def ultimos_logs(con, n=30):
     return con.execute("SELECT * FROM logs ORDER BY id DESC LIMIT ?", (n,)).fetchall()
+
+
+def latencias(con, n=200):
+    """Latencias (ms) credencial -> servo de las últimas n aperturas medidas."""
+    filas = con.execute(
+        "SELECT metodo, detalle FROM logs WHERE resultado='concedido' AND detalle LIKE 'latencia %' "
+        "ORDER BY id DESC LIMIT ?", (n,)).fetchall()
+    return [(f["metodo"], float(f["detalle"].split()[1])) for f in filas]
+
+
