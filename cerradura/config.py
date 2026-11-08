@@ -48,6 +48,11 @@ SERVO_ABRIR = 410                    # 2.0 ms
 LCD_ADDR = 0x27
 LCD_COLS, LCD_FILAS = 20, 4
 
+# ---------------- Prioridades (bitácora clase 8) ----------------
+# Valor nice: más bajo = más prioridad. Los de proceso se fijan en los servicios de systemd.
+NICE_CONTROL = -10                   # servo y decisión de apertura: prioridad alta
+NICE_ENTRADAS = -5                   # lectura de sensores: alta
+
 # ---------------- Lógica de control ----------------
 TIEMPO_ABIERTO_S = 8                 # si nadie abre la puerta, se vuelve a cerrar
 MAX_INTENTOS = 5                     # intentos fallidos seguidos antes del bloqueo

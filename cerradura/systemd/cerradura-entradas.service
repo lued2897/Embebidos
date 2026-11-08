@@ -8,6 +8,8 @@ WorkingDirectory=/opt/cerradura
 ExecStart=/opt/cerradura/venv/bin/python entradas.py
 Restart=always
 RestartSec=2
+# Bitácora clase 8: lectura de sensores = prioridad alta (config.NICE_ENTRADAS)
+Nice=-5
 
 [Install]
 WantedBy=multi-user.target

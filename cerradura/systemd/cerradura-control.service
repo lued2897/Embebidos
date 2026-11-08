@@ -1,5 +1,5 @@
 [Unit]
-Description=Cerradura - proceso de control
+Description=Cerradura - proceso de control (servo, LCD, logs)
 After=local-fs.target
 
 [Service]
@@ -7,6 +7,8 @@ WorkingDirectory=/opt/cerradura
 ExecStart=/opt/cerradura/venv/bin/python control.py
 Restart=always
 RestartSec=2
+# Bitácora clase 8: apertura y decisión = prioridad alta (config.NICE_CONTROL)
+Nice=-10
 
 [Install]
 WantedBy=multi-user.target
