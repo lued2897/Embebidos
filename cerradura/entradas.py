@@ -137,7 +137,7 @@ def _bucle_teclado(escanear):
             pin = ""
             ipc.enviar({"tipo": "pin_progreso", "n": 0})
         previa = tecla
-        time.sleep(0.02)                            # antirrebote / sondeo 50 Hz
+        time.sleep(0.02)                            # bitácora clase 8: barrido a 50 Hz (antirrebote)
 
 
 # ---------------------------------------------------------------- Reed switch MC-38

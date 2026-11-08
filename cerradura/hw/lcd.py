@@ -1,3 +1,8 @@
+"""Driver mínimo para LCD 20x4 HD44780 con módulo I2C PCF8574.
+
+Las líneas de más de 20 caracteres se desplazan solas (scroll tipo marquesina)
+en un hilo de baja prioridad.
+"""
 import os
 import threading
 import time
