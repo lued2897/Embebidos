@@ -1,0 +1,7 @@
+smbus2
+spidev
+pyserial
+pyfingerprint
+posix_ipc
+gpiozero
+lgpio

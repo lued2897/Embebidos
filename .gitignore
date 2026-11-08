@@ -19,3 +19,8 @@ FIN
 *.txt
 prueba_logica
 radiografia/radiografia
+
+# El *.txt de arriba excluía las dependencias de la cerradura
+!cerradura/requirements.txt
+__pycache__/
+cerradura/datos/
