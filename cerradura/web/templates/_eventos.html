@@ -1,0 +1,6 @@
+<div class="tabla"><table>
+  <tr><th>Fecha</th><th>Método</th><th>Resultado</th><th>Usuario</th><th>Detalle</th></tr>
+  {% for r in logs %}<tr><td>{{ r.fecha }}</td><td>{{ r.metodo }}</td>
+    <td><span class="etiqueta {{ r.resultado.split()[0] }}">{{ r.resultado }}</span></td>
+    <td>{{ r.usuario or '' }}</td><td>{{ r.detalle or '' }}</td></tr>{% endfor %}
+</table></div>

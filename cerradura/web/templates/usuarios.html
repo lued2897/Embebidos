@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block titulo %}Usuarios{% endblock %}
+{% block contenido %}
+<div class="rejilla mitades">
+<section class="tarjeta">
+  <h2>Usuarios registrados</h2>
+  <div class="tabla angosta"><table>
+    <tr><th>Nombre</th><th>Tarjeta</th><th>PIN</th><th>Huella</th><th></th></tr>
+    {% for u in usuarios %}<tr>
+      <td>{{ u.nombre }}</td><td>{{ u.rfid_uid or '—' }}</td><td>{{ 'sí' if u.tiene_pin else '—' }}</td>
+      <td>{{ u.huella_id if u.huella_id is not none else '—' }}</td>
+      <td><form method="post" action="{{ url_for('usuarios_eliminar', nombre=u.nombre) }}" onsubmit="return confirm('¿Eliminar a {{ u.nombre }}?')">
+        <input type="hidden" name="csrf" value="{{ csrf() }}"><button class="peligro">Eliminar</button></form></td>
+    </tr>{% endfor %}
+  </table></div>
+</section>
+<section class="tarjeta">
+  <h2>Agregar usuario</h2>
+  <form method="post" class="formulario">
+    <input type="hidden" name="csrf" value="{{ csrf() }}">
+    <div class="campo"><label for="nombre">Nombre</label><input id="nombre" name="nombre" required></div>
+    <div class="campo"><label for="pin">PIN (4 a 6 dígitos, opcional)</label>
+      <input id="pin" name="pin" inputmode="numeric" autocomplete="off"></div>
+    <div><button class="boton azul">Agregar</button></div>
+  </form>
+  <p class="suave">La tarjeta y la huella se registran en la Raspberry con <code>admin.py tarjeta</code> y <code>admin.py huella</code>.</p>
+</section>
+</div>
+{% endblock %}

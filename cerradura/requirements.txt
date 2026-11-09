@@ -5,3 +5,4 @@ pyfingerprint
 posix_ipc
 gpiozero
 lgpio
+flask

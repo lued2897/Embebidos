@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block titulo %}Panel{% endblock %}
+{% block contenido %}
+<div class="rejilla">
+  <section class="tarjeta">
+    <h2>Estado</h2>
+    <div class="dato"><span>Puerta</span><b id="puerta" class="grande">…</b></div>
+    <div class="dato"><span>Cerradura</span><b id="cerradura">…</b></div>
+    <p class="suave" id="aviso"></p>
+    <button class="boton oro" id="abrir">Abrir a distancia</button>
+    <p class="suave" id="resultado"></p>
+  </section>
+  <section class="tarjeta">
+    <h2>Cámara</h2>
+    {% if camara %}<img class="video" src="{{ url_for('video') }}" alt="Video en vivo de la entrada">
+    <p class="suave" id="camara"></p>{% else %}<p class="suave">Cámara desactivada en config.py</p>{% endif %}
+  </section>
+</div>
+<section class="tarjeta">
+  <h2>Últimos eventos</h2>
+  {% include "_eventos.html" %}
+  <p><a href="{{ url_for('historial') }}">Ver historial completo</a></p>
+</section>
+<script>
+const CSRF = "{{ csrf() }}";
+const $ = id => document.getElementById(id);
+async function estado() {
+  try {
+    const r = await fetch("/api/estado", {cache: "no-store"});
+    if (r.status === 401) { location.href = "/login"; return; }
+    const e = await r.json();
+    if (!e.ok) { $("aviso").textContent = "Sin conexión con el proceso de control"; return; }
+    $("aviso").textContent = e.bloqueado ? "Sistema bloqueado por intentos fallidos" : "";
+    $("puerta").textContent = e.puerta;
+    $("puerta").className = "grande " + (e.puerta === "cerrada" ? "ok" : "mal");
+    $("cerradura").textContent = e.desbloqueada ? "abierta" : "cerrada";
+    if (e.camara && $("camara")) $("camara").textContent = e.camara.error ? "Error: " + e.camara.error : "";
+  } catch (err) { $("aviso").textContent = "Sin conexión con la Raspberry"; }
+}
+$("abrir").onclick = async () => {
+  $("abrir").disabled = true;
+  const r = await fetch("/api/abrir", {method: "POST", headers: {"X-CSRF": CSRF}});
+  const e = await r.json();
+  $("resultado").textContent = e.ok ? "Apertura enviada" : ("No se pudo abrir: " + (e.motivo || e.error));
+  setTimeout(() => { $("abrir").disabled = false; }, 2000);
+  estado();
+};
+estado();
+setInterval(estado, {{ estado_ms }});
+</script>
+{% endblock %}

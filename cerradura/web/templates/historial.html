@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block titulo %}Historial{% endblock %}
+{% block contenido %}
+<section class="tarjeta">
+  <h2>Historial · últimos {{ n }} eventos</h2>
+  {% include "_eventos.html" %}
+  <p><a href="?n=500">Ver 500</a> · <a href="?n=1000">Ver 1000</a></p>
+</section>
+{% endblock %}

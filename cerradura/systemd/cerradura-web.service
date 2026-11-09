@@ -1,0 +1,14 @@
+[Unit]
+Description=Cerradura - app web y camara (puerto 8000)
+After=network-online.target cerradura-control.service
+Wants=network-online.target cerradura-control.service
+
+[Service]
+WorkingDirectory=/opt/cerradura
+ExecStart=/opt/cerradura/venv/bin/python web/app.py
+Restart=always
+RestartSec=2
+Nice=0
+
+[Install]
+WantedBy=multi-user.target

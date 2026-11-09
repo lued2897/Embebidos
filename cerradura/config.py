@@ -5,6 +5,7 @@ import os
 DATA_DIR = os.environ.get("CERRADURA_DATA", "/var/lib/cerradura")
 DB_PATH = os.path.join(DATA_DIR, "cerradura.db")
 PEPPER_PATH = os.path.join(DATA_DIR, "pepper.key")   # llave secreta para el hash de PINs
+WEB_SECRET_PATH = os.path.join(DATA_DIR, "web.key")  # llave para firmar las sesiones web
 
 # ---------------- IPC (bitácora clase 11) ----------------
 SOCKET_PATH = "/tmp/cerradura_control.sock"           # entradas/web -> control (FIFO, una solicitud a la vez)
@@ -52,6 +53,7 @@ LCD_COLS, LCD_FILAS = 20, 4
 # Valor nice: más bajo = más prioridad. Los de proceso se fijan en los servicios de systemd.
 NICE_CONTROL = -10                   # servo y decisión de apertura: prioridad alta
 NICE_ENTRADAS = -5                   # lectura de sensores: alta
+NICE_WEB = 0                         # app web: normal
 NICE_CAMARA = 10                     # cámara: media-baja, no debe retrasar a la cerradura
 NICE_HILO_LCD = 10                   # desplazamiento del display: baja
 
@@ -59,6 +61,13 @@ NICE_HILO_LCD = 10                   # desplazamiento del display: baja
 TIEMPO_ABIERTO_S = 8                 # si nadie abre la puerta, se vuelve a cerrar
 MAX_INTENTOS = 5                     # intentos fallidos seguidos antes del bloqueo
 BLOQUEO_S = 30
+
+# ---------------- App web ----------------
+WEB_PUERTO = 8000
+WEB_SESION_MIN = 10                  # la sesión caduca tras 10 min sin actividad (requisito Avance 1)
+WEB_MAX_INTENTOS = 5                 # intentos de login fallidos antes de bloquear
+WEB_BLOQUEO_S = 60
+WEB_ESTADO_MS = 500                  # la página consulta el estado de la puerta cada 500 ms (< 1 s)
 
 # ---------------- Cámara (pipe rpicam-vid -> web, bitácora clase 9) ----------------
 CAMARA_ACTIVA = True

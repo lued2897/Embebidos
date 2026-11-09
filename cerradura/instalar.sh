@@ -25,14 +25,17 @@ apt-get install -y rpicam-apps-lite || apt-get install -y libcamera-apps-lite ||
 # 3) Código y entorno de Python
 mkdir -p /opt/cerradura /var/lib/cerradura
 chmod 700 /var/lib/cerradura
-cp -r ./*.py hw /opt/cerradura/
+cp -r ./*.py hw web /opt/cerradura/
 [ -d /opt/cerradura/venv ] || python3 -m venv /opt/cerradura/venv
 /opt/cerradura/venv/bin/pip install -r requirements.txt
 
 # 4) Servicios: arrancan solos al encender
 cp systemd/*.service /etc/systemd/system/
 systemctl daemon-reload
-systemctl enable cerradura-control cerradura-entradas
+systemctl enable cerradura-control cerradura-entradas cerradura-web
 
 echo
-echo "Listo. Reinicia la Raspberry: sudo reboot"
+echo "Listo. Falta:"
+echo "  1) sudo reboot"
+echo "  2) cd /opt/cerradura && sudo venv/bin/python admin.py web-admin <usuario>"
+echo "  3) Abrir http://$(hostname -I | awk '{print $1}'):8000 desde la red local"

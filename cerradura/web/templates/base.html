@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block titulo %}Cerradura{% endblock %} · Equipo 8</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='estilo.css') }}">
+</head>
+{% from "_candado.html" import candado %}
+{% block cuerpo %}
+<body>
+<header class="cabeza">
+  <div class="barra"><nav>
+    <a class="marca" href="{{ url_for('panel') }}">{{ candado() }}<span><b>Cerradura</b><small>Equipo 8 · FSE</small></span></a>
+    <a href="{{ url_for('panel') }}" class="{{ 'activo' if request.endpoint == 'panel' }}">Panel</a>
+    <a href="{{ url_for('historial') }}" class="{{ 'activo' if request.endpoint == 'historial' }}">Historial</a>
+    <a href="{{ url_for('usuarios') }}" class="{{ 'activo' if request.endpoint == 'usuarios' }}">Usuarios</a>
+    <form method="post" action="{{ url_for('logout') }}">
+      <input type="hidden" name="csrf" value="{{ csrf() }}"><button>Salir ({{ usuario }})</button>
+    </form>
+  </nav></div>
+  <svg class="ola" viewBox="0 0 1440 56" preserveAspectRatio="none" aria-hidden="true">
+    <path d="M0 0H1440V26C1210 60 990 6 730 30C470 54 250 14 0 44Z" fill="#d59f0f"/>
+    <path d="M0 0H1440V12C1190 46 970 -4 720 18C470 40 240 2 0 30Z" fill="#003d79"/>
+  </svg>
+</header>
+<main>
+  {% for m in get_flashed_messages() %}<div class="aviso">{{ m }}</div>{% endfor %}
+  {% block contenido %}{% endblock %}
+</main>
+<footer class="pie">
+  <svg class="ola" viewBox="0 0 1440 40" preserveAspectRatio="none" aria-hidden="true">
+    <path d="M0 40V18C250 -4 480 4 730 18C980 32 1210 32 1440 6V40Z" fill="#d59f0f"/>
+    <path d="M0 40V25C250 3 480 11 730 25C980 39 1210 39 1440 13V40Z" fill="#003d79"/>
+  </svg>
+  <p>Cerradura multifactor · Fundamentos de Sistemas Embebidos · Equipo 8</p>
+</footer>
+</body>
+{% endblock %}
+</html>

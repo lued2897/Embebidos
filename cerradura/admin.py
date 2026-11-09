@@ -10,6 +10,7 @@
     python3 admin.py logs     [n]
     python3 admin.py abrir                        # apertura remota (prueba del servo)
     python3 admin.py estado
+    python3 admin.py web-admin <usuario>          # crea o cambia un administrador de la app web
     python3 admin.py medir    [n]                 # latencia credencial -> servo de las últimas n aperturas
 
 Para 'tarjeta' (sin UID) y 'huella' deténer antes el proceso de entradas: 
