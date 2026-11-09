@@ -3,7 +3,30 @@
 {% block contenido %}
 <section class="tarjeta">
   <h2>Historial · últimos {{ n }} eventos</h2>
+  <div class="filtros">
+    <input type="search" id="buscar" placeholder="Buscar usuario, fecha, resultado o detalle" aria-label="Buscar en el historial">
+    <select id="metodo" aria-label="Filtrar por método">
+      <option value="">Todos los métodos</option>
+      {% for m in logs|map(attribute="metodo")|unique|sort %}<option>{{ m }}</option>{% endfor %}
+    </select>
+  </div>
+  <p class="suave" id="conteo" aria-live="polite"></p>
   {% include "_eventos.html" %}
   <p><a href="?n=500">Ver 500</a> · <a href="?n=1000">Ver 1000</a></p>
 </section>
+<script>
+const quitarAcentos = t => t.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+const filas = [...document.querySelectorAll(".tabla tr")].slice(1);
+const buscar = document.getElementById("buscar"), metodo = document.getElementById("metodo");
+function filtrar() {
+  const q = quitarAcentos(buscar.value.trim()), m = metodo.value;
+  let n = 0;
+  filas.forEach(f => {
+    const ok = (!m || f.cells[1].textContent === m) && (!q || quitarAcentos(f.textContent).includes(q));
+    f.hidden = !ok; if (ok) n++;
+  });
+  document.getElementById("conteo").textContent = (q || m) ? `${n} de ${filas.length} eventos` : "";
+}
+buscar.oninput = filtrar; metodo.onchange = filtrar;
+</script>
 {% endblock %}
