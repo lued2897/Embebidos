@@ -7,10 +7,10 @@ cd "$(dirname "$0")"
 
 if [ "$(id -u)" -ne 0 ]; then echo "Ejecuta con sudo"; exit 1; fi
 
-# 1) Interfaces: I2C (PCA9685, LCD), SPI (RC522), UART libre para la huella
+# 1) Interfaces: I2C (PCA9685, LCD), SPI (RC522), UART libre para la huella, cámara
 CFG=/boot/firmware/config.txt; [ -f "$CFG" ] || CFG=/boot/config.txt
 CMD=/boot/firmware/cmdline.txt; [ -f "$CMD" ] || CMD=/boot/cmdline.txt
-for l in "dtparam=i2c_arm=on" "dtparam=spi=on" "enable_uart=1" "dtoverlay=disable-bt"; do
+for l in "dtparam=i2c_arm=on" "dtparam=spi=on" "enable_uart=1" "dtoverlay=disable-bt" "camera_auto_detect=1"; do
   grep -qxF "$l" "$CFG" || echo "$l" >> "$CFG"
 done
 systemctl disable --now hciuart 2>/dev/null || true          # el Bluetooth ya no usa el UART
@@ -19,6 +19,8 @@ sed -i 's/console=serial0,[0-9]* //' "$CMD"                    # la consola tamp
 # 2) Paquetes del sistema
 apt-get update
 apt-get install -y python3-venv python3-dev i2c-tools gpiod swig liblgpio-dev
+apt-get install -y rpicam-apps-lite || apt-get install -y libcamera-apps-lite || \
+  echo "AVISO: instala rpicam-apps para la cámara"
 
 # 3) Código y entorno de Python
 mkdir -p /opt/cerradura /var/lib/cerradura
