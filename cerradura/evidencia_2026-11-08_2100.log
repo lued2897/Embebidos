@@ -1,0 +1,197 @@
+
+===== Sistema =====
+$ uname -a
+Linux BERRYGOOD 6.18.39+rpt-rpi-v7 #1 SMP Raspbian 1:6.18.39-1+rpt1 (2026-07-29) armv7l GNU/Linux
+
+$ grep PRETTY_NAME /etc/os-release
+PRETTY_NAME="Raspbian GNU/Linux 13 (trixie)"
+
+$ free -m
+               total        used        free      shared  buff/cache   available
+Mem:             920         359          51          14         559         560
+Swap:            919           0         919
+
+
+===== Arranque (requisito Avance 1: operativo en menos de 60 s) =====
+$ systemd-analyze
+Startup finished in 4.343s (kernel) + 36.135s (userspace) = 40.478s 
+graphical.target reached after 30.731s in userspace.
+
+$ systemd-analyze blame | grep cerradura
+
+$ journalctl -b -o short-monotonic -u cerradura-control | grep -m1 'escuchando'
+[   15.496474] BERRYGOOD python[629]: 2026-11-08 18:37:18,350 control control escuchando en /tmp/cerradura_control.sock
+
+$ journalctl -b -o short-monotonic -u cerradura-entradas | grep -m1 'RFID listo'
+[   15.477644] BERRYGOOD python[630]: 2026-11-08 18:37:18,331 entradas RFID listo (VersionReg=0xB2)
+
+$ journalctl -b -o short-monotonic -u cerradura-web | grep -m1 'Running on'
+[ 5685.412718] BERRYGOOD python[3310]:  * Running on all addresses (0.0.0.0)
+
+
+===== Servicios y prioridades (bitácora clase 8) =====
+$ systemctl is-active cerradura-control cerradura-entradas cerradura-web
+active
+active
+active
+
+$ ps -eo pid,ni,rss,args | grep -E 'control.py|entradas.py|web/app.py|rpicam-vid' | grep -v grep
+ 5538 -10 16840 /opt/cerradura/venv/bin/python control.py
+ 5539   0 28456 /opt/cerradura/venv/bin/python web/app.py
+ 5540  -5 19448 /opt/cerradura/venv/bin/python entradas.py
+
+$ ps -L -o tid,ni,comm -p 5538
+  TID  NI COMMAND
+ 5538 -10 python
+ 5542  10 python
+ 5543 -10 python
+
+
+===== IPC (bitácora clase 11): socket y cola de mensajes =====
+$ ls -l /tmp/cerradura_control.sock
+srw-rw---- 1 root root 0 Nov  8 20:44 /tmp/cerradura_control.sock
+
+$ ls -l /dev/mqueue/ && cat /dev/mqueue/cerradura_puerta
+total 0
+-rw------- 1 root root 80 Nov  8 20:44 cerradura_puerta
+QSIZE:0          NOTIFY:0     SIGNO:0     NOTIFY_PID:0     
+
+
+===== Clase 21: drivers del kernel y nodos en /dev =====
+$ lsmod | grep -E 'i2c|spi|bcm2835|unicam|ov5647|videodev' 
+ov5647                 20480  0
+spidev                 20480  2
+bcm2835_codec          49152  0
+bcm2835_v4l2           45056  0
+v4l2_mem2mem           40960  1 bcm2835_codec
+bcm2835_isp            28672  0
+bcm2835_mmal_vchiq     36864  3 bcm2835_isp,bcm2835_codec,bcm2835_v4l2
+bcm2835_unicam_legacy    40960  0
+vc_sm_cma              24576  2 bcm2835_isp,bcm2835_mmal_vchiq
+v4l2_dv_timings        36864  1 bcm2835_unicam_legacy
+v4l2_fwnode            20480  3 ov5647,bcm2835_unicam_legacy
+videobuf2_dma_contig    16384  3 bcm2835_isp,bcm2835_codec,bcm2835_unicam_legacy
+videobuf2_vmalloc      12288  1 bcm2835_v4l2
+v4l2_async             20480  3 v4l2_fwnode,ov5647,bcm2835_unicam_legacy
+videobuf2_v4l2         28672  5 bcm2835_isp,bcm2835_codec,bcm2835_unicam_legacy,bcm2835_v4l2,v4l2_mem2mem
+videodev              294912  9 bcm2835_isp,v4l2_fwnode,ov5647,bcm2835_codec,bcm2835_unicam_legacy,bcm2835_v4l2,v4l2_mem2mem,videobuf2_v4l2,v4l2_async
+i2c_mux_pinctrl        12288  0
+videobuf2_common       69632  9 bcm2835_isp,bcm2835_codec,bcm2835_unicam_legacy,videobuf2_dma_contig,videobuf2_vmalloc,videobuf2_memops,bcm2835_v4l2,v4l2_mem2mem,videobuf2_v4l2
+i2c_mux                12288  1 i2c_mux_pinctrl
+mc                     53248  9 bcm2835_isp,ov5647,bcm2835_codec,videobuf2_common,videodev,bcm2835_unicam_legacy,v4l2_mem2mem,videobuf2_v4l2,v4l2_async
+snd_bcm2835            24576  1
+i2c_bcm2835            12288  3
+spi_bcm2835            16384  0
+i2c_dev                16384  4
+snd_pcm               139264  5 snd_compress,snd_pcm_dmaengine,snd_soc_hdmi_codec,snd_bcm2835,snd_soc_core
+snd                   102400  12 snd_compress,snd_seq,snd_soc_hdmi_codec,snd_timer,snd_seq_device,snd_bcm2835,snd_soc_core,snd_pcm
+
+$ ls -l /dev/i2c-1 /dev/spidev0.0 /dev/gpiochip0 /dev/serial0 /dev/ttyAMA0 /dev/video0
+crw-rw----+ 1 root gpio    254,  0 Nov  8 18:37 /dev/gpiochip0
+crw-rw----  1 root i2c      89,  1 Nov  8 18:37 /dev/i2c-1
+lrwxrwxrwx  1 root root          7 Nov  8 18:37 /dev/serial0 -> ttyAMA0
+crw-rw----  1 root spi     153,  0 Nov  8 18:37 /dev/spidev0.0
+crw-rw----  1 root dialout 204, 64 Nov  8 21:00 /dev/ttyAMA0
+crw-rw----+ 1 root video    81, 13 Nov  8 18:37 /dev/video0
+
+$ readlink -f /dev/serial0
+/dev/ttyAMA0
+
+$ i2cdetect -y 1
+     0  1  2  3  4  5  6  7  8  9  a  b  c  d  e  f
+00:                         -- -- -- -- -- -- -- -- 
+10: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
+20: -- -- -- -- -- -- -- 27 -- -- -- -- -- -- -- -- 
+30: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
+40: 40 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
+50: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
+60: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
+70: -- -- -- -- -- -- -- --                         
+
+$ printf 'I2C1 a %d Hz\n' 0x$(od -An -tx1 /sys/class/i2c-adapter/i2c-1/of_node/clock-frequency | tr -d ' \n')
+od: /sys/class/i2c-adapter/i2c-1/of_node/clock-frequency: No such file or directory
+./evidencia.sh: line 14: printf: 0x: invalid hex number
+I2C1 a 0 Hz
+
+$ gpioinfo gpiochip0 | grep -E 'line +(5|6|12|13|16|17|19|20|21):'
+gpioinfo: cannot find line 'gpiochip0'
+
+$ dmesg | grep -iE 'ov5647|unicam|spi|ttyAMA|i2c' | tail -n 15
+[    0.026334] /soc/csi@7e801000: Fixed dependency cycle(s) with /soc/i2c0mux/i2c@1/ov5647@36
+[    0.026433] /soc/i2c0mux/i2c@1/ov5647@36: Fixed dependency cycle(s) with /soc/csi@7e801000
+[    0.027940] /soc/csi@7e801000: Fixed dependency cycle(s) with /soc/i2c0mux/i2c@1/ov5647@36
+[    0.029438] /soc/i2c0mux/i2c@1/ov5647@36: Fixed dependency cycle(s) with /soc/csi@7e801000
+[    2.222962] 3f201000.serial: ttyAMA0 at MMIO 0x3f201000 (irq = 114, base_baud = 0) is a PL011 rev2
+[    8.970286] i2c_dev: i2c /dev entries driver
+[   11.276941] i2c i2c-11: Added multiplexed i2c bus 0
+[   11.277475] /soc/csi@7e801000: Fixed dependency cycle(s) with /soc/i2c0mux/i2c@1/ov5647@36
+[   11.277567] /soc/i2c0mux/i2c@1/ov5647@36: Fixed dependency cycle(s) with /soc/csi@7e801000
+[   11.277855] i2c i2c-11: Added multiplexed i2c bus 10
+
+$ rpicam-hello --list-cameras 2>&1 | head -n 8
+Available cameras
+-----------------
+0 : ov5647 [2592x1944 10-bit GBRG] (/base/soc/i2c0mux/i2c@1/ov5647@36)
+    Modes: 'SGBRG10_CSI2P' : 640x480 [62.50 fps - (16, 0)/2560x1920 crop]
+                             1296x972 [46.34 fps - (0, 0)/2592x1944 crop]
+                             1920x1080 [32.81 fps - (348, 434)/1928x1080 crop]
+                             2592x1944 [15.63 fps - (0, 0)/2592x1944 crop]
+
+
+
+===== Clase 20: registros del PCA9685 (enteros de 8 bits por I2C) =====
+$ i2cget -y 1 0x40 0x00
+0x20
+
+PRE_SCALE (0xFE): debe ser 0x79 = 121 para 50 Hz
+$ i2cget -y 1 0x40 0xFE
+0x79
+
+Canal 15: LED15_OFF_L (0x44) y LED15_OFF_H (0x45); 205 = 0x00CD cerrado, 410 = 0x019A abierto
+$ i2cget -y 1 0x40 0x44; i2cget -y 1 0x40 0x45
+0xcd
+0x00
+
+
+===== Clase 20: VersionReg del RC522 por SPI (lectura directa, sin reiniciar el chip) =====
+$ /opt/cerradura/venv/bin/python -c "import spidev; s=spidev.SpiDev(); s.open(0,0); s.max_speed_hz=1000000; print(hex(s.xfer2([0x80|(0x37<<1),0])[1]))"
+0xb2
+
+
+===== Clase 20: el pin del reed cambia sin que el programa lo escriba (equivalente a volatile) =====
+Acerca y aleja el imán durante los próximos 6 s
+17: ip    -- | lo // GPIO17 = input
+17: ip    -- | lo // GPIO17 = input
+17: ip    -- | lo // GPIO17 = input
+17: ip    -- | lo // GPIO17 = input
+17: ip    -- | lo // GPIO17 = input
+17: ip    -- | lo // GPIO17 = input
+
+===== Medición: latencia credencial -> servo (requisito Avance 1: menos de 3 s) =====
+$ cd /opt/cerradura && /opt/cerradura/venv/bin/python admin.py medir
+Aperturas medidas: 62
+Mediana: 2.1 ms   Máxima: 494.8 ms   Mínima: 1.9 ms
+  huella  n=20   mediana   352.1 ms   máx   494.8 ms
+  pin     n=20   mediana     2.0 ms   máx     2.4 ms
+  remoto  n=1    mediana     2.4 ms   máx     2.4 ms
+  rfid    n=21   mediana     1.9 ms   máx    14.3 ms
+Requisito del Avance 1: < 3000 ms -> CUMPLE
+
+$ cd /opt/cerradura && /opt/cerradura/venv/bin/python admin.py estado
+{'ok': True, 'puerta': 'cerrada', 'desbloqueada': False, 'bloqueado': False, 'ms': 0.2}
+
+
+===== Base de datos =====
+$ ls -l /var/lib/cerradura
+total 2552
+-rw-r--r-- 1 root root   49152 Nov  6 19:53 cerradura.db
+-rw-r--r-- 1 root root   32768 Nov  8 20:46 cerradura.db-shm
+-rw-r--r-- 1 root root 2517352 Nov  8 20:46 cerradura.db-wal
+-rw------- 1 root root      32 Nov  3 20:53 pepper.key
+-rw------- 1 root root      32 Nov  8 20:15 web.key
+
+$ /opt/cerradura/venv/bin/python -c "import sys; sys.path.insert(0,'/opt/cerradura'); import db; c=db.conectar(); print(c.execute('select count(*) from logs').fetchone()[0], 'eventos'); print(c.execute('select count(*) from usuarios').fetchone()[0], 'usuarios')"
+551 eventos
+4 usuarios
+
+Evidencia guardada en evidencia_2026-11-08_2100.log
