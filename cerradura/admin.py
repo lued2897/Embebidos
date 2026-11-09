@@ -124,6 +124,15 @@ def main():
         elif cmd == "estado":
             print(ipc.enviar({"tipo": "estado"}))
 
+        elif cmd == "web-admin":
+            pw = getpass.getpass("Contraseña (mínimo 8 caracteres): ")
+            if len(pw) < 8:
+                sys.exit("Contraseña demasiado corta")
+            if getpass.getpass("Repita la contraseña: ") != pw:
+                sys.exit("No coinciden")
+            db.crear_admin(con, args[0], pw)
+            print(f"Administrador web '{args[0]}' guardado")
+
         elif cmd == "medir":
             import statistics
             datos = db.latencias(con, int(args[0]) if args else 200)

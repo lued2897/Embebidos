@@ -44,6 +44,9 @@ def conectar() -> sqlite3.Connection:
     con.row_factory = sqlite3.Row
     con.execute("PRAGMA journal_mode=WAL")
     con.execute("PRAGMA synchronous=FULL")
+    # Control, entradas y web abren la misma base: si otro proceso está escribiendo,
+    # se espera hasta 3 s en lugar de fallar con "database is locked".
+    con.execute("PRAGMA busy_timeout=3000")
     con.executescript(
         """
         CREATE TABLE IF NOT EXISTS usuarios (
@@ -53,6 +56,11 @@ def conectar() -> sqlite3.Connection:
             pin_hash  TEXT UNIQUE,
             huella_id INTEGER UNIQUE,
             activo    INTEGER NOT NULL DEFAULT 1,
+            creado    TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS admins (
+            usuario   TEXT PRIMARY KEY,
+            pass_hash TEXT NOT NULL,
             creado    TEXT NOT NULL
         );
         CREATE TABLE IF NOT EXISTS logs (
@@ -147,3 +155,28 @@ def latencias(con, n=200):
     return [(f["metodo"], float(f["detalle"].split()[1])) for f in filas]
 
 
+# ---------------- Admins web ----------------
+def _scrypt(password, sal):
+    return hashlib.scrypt(password.encode(), salt=sal, n=2**14, r=8, p=1, dklen=32)
+
+
+def crear_admin(con, usuario, password):
+    sal = os.urandom(16)
+    valor = f"scrypt${sal.hex()}${_scrypt(password, sal).hex()}"
+    with _lock:
+        con.execute("INSERT OR REPLACE INTO admins (usuario, pass_hash, creado) VALUES (?, ?, ?)",
+                    (usuario, valor, datetime.now().isoformat(timespec="seconds")))
+        con.commit()
+
+
+def verificar_admin(con, usuario, password):
+    fila = con.execute("SELECT pass_hash FROM admins WHERE usuario=?", (usuario,)).fetchone()
+    if not fila:
+        _scrypt(password, b"0" * 16)                 # mismo tiempo de respuesta exista o no el usuario
+        return False
+    _, sal, esperado = fila["pass_hash"].split("$")
+    return hmac.compare_digest(_scrypt(password, bytes.fromhex(sal)).hex(), esperado)
+
+
+def hay_admins(con):
+    return con.execute("SELECT COUNT(*) FROM admins").fetchone()[0] > 0
