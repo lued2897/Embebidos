@@ -2,6 +2,7 @@
 
 - Socket UNIX (stream): entradas/web -> control. 
 - Cola de mensajes POSIX: reed switch -> control (estado de la puerta).
+- Cola de mensajes POSIX: control -> entradas (registrar o borrar una huella en el AS608).
 """
 import json
 import socket
@@ -47,3 +48,28 @@ def cola_puerta(crear=True):
     import posix_ipc
     flags = posix_ipc.O_CREAT if crear else 0
     return posix_ipc.MessageQueue(config.MQ_PUERTA, flags, max_messages=10, max_message_size=64)
+
+
+def cola_ordenes():
+    import posix_ipc
+    return posix_ipc.MessageQueue(config.MQ_ORDENES, posix_ipc.O_CREAT, max_messages=10, max_message_size=256)
+
+
+def enviar_orden(orden: dict):
+    """Deja una orden para el proceso de entradas. La cola la guarda aunque entradas
+    esté ocupado o reiniciándose; si está llena (10 órdenes) lanza BusyError."""
+    cola = cola_ordenes()
+    try:
+        cola.send(json.dumps(orden), timeout=0)
+    finally:
+        cola.close()
+
+
+def recibir_orden(cola, espera=0):
+    """Siguiente orden de la cola o None si no hay (espera=0: no bloquea)."""
+    import posix_ipc
+    try:
+        msg, _ = cola.receive(timeout=espera)
+    except posix_ipc.BusyError:
+        return None
+    return json.loads(msg)

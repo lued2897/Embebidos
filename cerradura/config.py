@@ -10,6 +10,8 @@ WEB_SECRET_PATH = os.path.join(DATA_DIR, "web.key")  # llave para firmar las ses
 # ---------------- IPC (bitácora clase 11) ----------------
 SOCKET_PATH = "/tmp/cerradura_control.sock"           # entradas/web -> control (FIFO, una solicitud a la vez)
 MQ_PUERTA = "/cerradura_puerta"                       # cola de mensajes POSIX: estado del reed switch
+MQ_ORDENES = "/cerradura_ordenes"                     # cola de mensajes POSIX: control -> entradas (huellas)
+REGISTRO_TIMEOUT_S = 30                               # tiempo para acercar la tarjeta o poner el dedo
 
 # ---------------- GPIO (numeración BCM) ----------------
 # Teclado matricial 4x4

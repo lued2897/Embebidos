@@ -3,6 +3,8 @@
 
 Cada sensor corre en su propio hilo. Las credenciales se mandan al proceso de
 control por el socket UNIX; el estado de la puerta va por la cola de mensajes.
+El hilo de la huella también atiende las órdenes del control (registrar o borrar
+una huella) que llegan por la cola /cerradura_ordenes: solo ese hilo usa el UART.
 
 Uso:
     python3 entradas.py          # con hardware
@@ -64,6 +66,65 @@ def hilo(nombre, fn):
 
 
 # ---------------------------------------------------------------- Huella AS608
+def pantalla(*lineas, duracion=config.REGISTRO_TIMEOUT_S):
+    """Pide al control que muestre un mensaje en el LCD."""
+    ipc.enviar({"tipo": "lcd", "lineas": list(lineas), "duracion": duracion}, timeout=2)
+
+
+def _esperar_dedo(f, puesto, vence):
+    """Espera a que el dedo esté (puesto=True) o no esté en el sensor, hasta 'vence'."""
+    while time.time() < vence:
+        if f.readImage() == puesto:
+            return True
+        time.sleep(0.1)
+    return False
+
+
+def registrar_huella(f, vence):
+    """Dos lecturas del mismo dedo -> plantilla guardada en el sensor. Devuelve el resultado."""
+    pantalla("REGISTRO DE HUELLA", "Coloque el dedo", "en el sensor")
+    if not _esperar_dedo(f, True, vence):
+        return {"ok": False, "mensaje": "tiempo agotado"}
+    f.convertImage(0x01)
+    posicion, _ = f.searchTemplate()
+    if posicion >= 0:
+        return {"ok": False, "mensaje": f"esa huella ya está guardada (posición {posicion})"}
+    pantalla("REGISTRO DE HUELLA", "Retire el dedo")
+    if not _esperar_dedo(f, False, vence):
+        return {"ok": False, "mensaje": "tiempo agotado"}
+    pantalla("REGISTRO DE HUELLA", "Coloque el mismo", "dedo otra vez")
+    if not _esperar_dedo(f, True, vence):
+        return {"ok": False, "mensaje": "tiempo agotado"}
+    f.convertImage(0x02)
+    if f.compareCharacteristics() == 0:
+        return {"ok": False, "mensaje": "las dos lecturas no coinciden"}
+    f.createTemplate()
+    return {"ok": True, "huella_id": f.storeTemplate()}
+
+
+def atender_orden(f, orden):
+    if orden.get("orden") == "huella_borrar":
+        try:
+            f.deleteTemplate(int(orden["huella_id"]))
+            log.info("plantilla %s borrada del sensor", orden["huella_id"])
+        except Exception as e:                      # no tumba el hilo: se avisa y se sigue
+            ipc.enviar({"tipo": "alerta", "origen": "huella", "nivel": "aviso",
+                        "mensaje": f"no se pudo borrar la plantilla {orden['huella_id']}: {e}"}, timeout=2)
+    elif orden.get("orden") == "huella_registrar":
+        if time.time() > orden["vence"]:            # quedó vieja (entradas se reinició)
+            return
+        try:
+            resultado = registrar_huella(f, orden["vence"])
+        except Exception as e:                      # el control no se queda esperando
+            ipc.enviar({"tipo": "registro_resultado", "id": orden["id"], "ok": False,
+                        "mensaje": f"error del sensor: {e}"})
+            raise
+        log.info("registro de huella: %s", resultado)
+        ipc.enviar({"tipo": "registro_resultado", "id": orden["id"], **resultado})
+        while f.readImage():                        # que no se lea como intento de apertura
+            time.sleep(0.2)
+
+
 def tarea_huella():
     from pyfingerprint.pyfingerprint import PyFingerprint
     f = PyFingerprint(config.HUELLA_PUERTO, config.HUELLA_BAUD, 0xFFFFFFFF, 0x00000000)
@@ -71,16 +132,24 @@ def tarea_huella():
         raise RuntimeError("contraseña del sensor de huella incorrecta")
     log.info("huella lista (%d plantillas guardadas)", f.getTemplateCount())
     reportar("huella")
-    while True:
-        if not f.readImage():
-            time.sleep(0.1)
-            continue
-        t_lectura = time.time()
-        f.convertImage(0x01)
-        posicion, _score = f.searchTemplate()       # -1 si no coincide (búsqueda dentro del sensor)
-        autenticar("huella", posicion, t_lectura)
-        while f.readImage():                        # espera a que retire el dedo
-            time.sleep(0.2)
+    ordenes = ipc.cola_ordenes()
+    try:
+        while True:
+            orden = ipc.recibir_orden(ordenes)      # no bloquea: revisa entre lecturas
+            if orden:
+                atender_orden(f, orden)
+                continue
+            if not f.readImage():
+                time.sleep(0.1)
+                continue
+            t_lectura = time.time()
+            f.convertImage(0x01)
+            posicion, _score = f.searchTemplate()   # -1 si no coincide (búsqueda dentro del sensor)
+            autenticar("huella", posicion, t_lectura)
+            while f.readImage():                    # espera a que retire el dedo
+                time.sleep(0.2)
+    finally:
+        ordenes.close()
 
 
 # ---------------------------------------------------------------- RFID RC522
@@ -189,7 +258,21 @@ def tarea_reed():
 
 
 # ---------------------------------------------------------------- Simulación
+def simular_ordenes():
+    """Sin sensor: cada registro de huella termina bien a los 2 s con la siguiente posición."""
+    ordenes, siguiente = ipc.cola_ordenes(), 100
+    while True:
+        orden = ipc.recibir_orden(ordenes, espera=None)
+        print("orden:", orden, flush=True)
+        if orden.get("orden") == "huella_registrar":
+            pantalla("REGISTRO DE HUELLA", "(simulado)", "Coloque el dedo")
+            time.sleep(2)
+            ipc.enviar({"tipo": "registro_resultado", "id": orden["id"], "ok": True, "huella_id": siguiente})
+            siguiente += 1
+
+
 def modo_simulacion():
+    threading.Thread(target=simular_ordenes, daemon=True).start()
     cola = ipc.cola_puerta()
     print("Comandos: rfid <UID> | pin <1234> | huella <id> | puerta abierta|cerrada | salir")
     for linea in sys.stdin:
