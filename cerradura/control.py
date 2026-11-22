@@ -150,7 +150,8 @@ class Control:
         if self.fallos >= config.MAX_INTENTOS:
             self.fallos = 0
             self.bloqueado_hasta = ahora + config.BLOQUEO_S
-            db.log(self.con, "sistema", "bloqueo temporal", detalle=f"{config.MAX_INTENTOS} intentos fallidos")
+            db.alerta(self.con, "sistema", f"bloqueo temporal: {config.MAX_INTENTOS} intentos fallidos seguidos",
+                      "critica")
             self.mensaje("SISTEMA BLOQUEADO", "Demasiados intentos", f"Espere {config.BLOQUEO_S} s",
                          duracion=config.BLOQUEO_S)
             return {"ok": False, "motivo": "bloqueado", "segundos": config.BLOQUEO_S}
@@ -173,6 +174,9 @@ class Control:
         if tipo == "abrir_remoto":                      # desde la app web
             detalle = self.abrir(msg.get("usuario", "admin"), "remoto", msg.get("t"))
             return {"ok": True, "detalle": detalle}
+        if tipo == "alerta":                            # de entradas o de la web
+            db.alerta(self.con, msg.get("origen", "sistema"), msg.get("mensaje", ""), msg.get("nivel", "aviso"))
+            return {"ok": True}
         if tipo == "estado":
             with self.mutex:
                 puerta = self.estado_puerta

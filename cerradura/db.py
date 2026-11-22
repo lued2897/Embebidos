@@ -1,4 +1,4 @@
-"""Base de datos local (SQLite en la microSD): usuarios y logs.
+"""Base de datos local (SQLite en la microSD): usuarios, logs y alertas.
 
 - PINs guardados como HMAC-SHA256(pepper, pin): nunca en texto plano.
 - journal_mode=WAL + synchronous=FULL: cada escritura queda en disco (fsync)
@@ -70,6 +70,14 @@ def conectar() -> sqlite3.Connection:
             resultado TEXT NOT NULL,
             usuario   TEXT,
             detalle   TEXT
+        );
+        CREATE TABLE IF NOT EXISTS alertas (
+            id      INTEGER PRIMARY KEY AUTOINCREMENT,
+            fecha   TEXT NOT NULL,
+            origen  TEXT NOT NULL,
+            mensaje TEXT NOT NULL,
+            nivel   TEXT NOT NULL,
+            vista   INTEGER NOT NULL DEFAULT 0
         );
         """
     )
@@ -153,6 +161,45 @@ def latencias(con, n=200):
         "SELECT metodo, detalle FROM logs WHERE resultado='concedido' AND detalle LIKE 'latencia %' "
         "ORDER BY id DESC LIMIT ?", (n,)).fetchall()
     return [(f["metodo"], float(f["detalle"].split()[1])) for f in filas]
+
+
+# ---------------- Alertas ----------------
+# critica: requiere atención (puerta forzada, bloqueo, sensor caído)
+# aviso:   algo raro pero no urgente
+# info:    se resolvió algo (un sensor volvió); se guarda ya como vista
+NIVELES = ("critica", "aviso", "info")
+
+
+def alerta(con, origen, mensaje, nivel="aviso"):
+    """Guarda una alerta para la app web y la deja también en el historial."""
+    nivel = nivel if nivel in NIVELES else "aviso"
+    fecha = datetime.now().isoformat(sep=" ", timespec="seconds")
+    with _lock:
+        con.execute("INSERT INTO alertas (fecha, origen, mensaje, nivel, vista) VALUES (?, ?, ?, ?, ?)",
+                    (fecha, origen, mensaje, nivel, 1 if nivel == "info" else 0))
+        con.execute("INSERT INTO logs (fecha, metodo, resultado, detalle) VALUES (?, ?, 'alerta', ?)",
+                    (fecha, origen, mensaje))
+        con.commit()
+
+
+def ultimas_alertas(con, n=50, solo_pendientes=False):
+    filtro = "WHERE vista=0 " if solo_pendientes else ""
+    return con.execute(f"SELECT * FROM alertas {filtro}ORDER BY id DESC LIMIT ?", (n,)).fetchall()
+
+
+def alertas_pendientes(con):
+    return con.execute("SELECT COUNT(*) FROM alertas WHERE vista=0").fetchone()[0]
+
+
+def marcar_alertas_vistas(con, hasta_id=None):
+    """Marca como vistas las alertas pendientes (hasta hasta_id, si se da)."""
+    with _lock:
+        if hasta_id is None:
+            cur = con.execute("UPDATE alertas SET vista=1 WHERE vista=0")
+        else:
+            cur = con.execute("UPDATE alertas SET vista=1 WHERE vista=0 AND id<=?", (hasta_id,))
+        con.commit()
+        return cur.rowcount
 
 
 # ---------------- Admins web ----------------

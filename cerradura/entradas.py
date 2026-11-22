@@ -28,6 +28,26 @@ def autenticar(metodo, valor, t_lectura=None):
     return r
 
 
+SENSORES = {"huella": "sensor de huella", "rfid": "lector RFID", "teclado": "teclado", "reed": "sensor de puerta"}
+_fallando = set()
+_fallando_lock = threading.Lock()
+
+
+def reportar(nombre, error=None):
+    """Manda una alerta al control cuando un sensor falla y otra cuando vuelve.
+    Solo una por cambio: un sensor que sigue fallando cada 3 s no llena la lista."""
+    with _fallando_lock:
+        if error is not None and nombre not in _fallando:
+            _fallando.add(nombre)
+            msg = {"mensaje": f"{SENSORES.get(nombre, nombre)}: {error}", "nivel": "critica"}
+        elif error is None and nombre in _fallando:
+            _fallando.discard(nombre)
+            msg = {"mensaje": f"{SENSORES.get(nombre, nombre)} volvió a responder", "nivel": "info"}
+        else:
+            return
+    ipc.enviar({"tipo": "alerta", "origen": nombre, **msg}, timeout=2)
+
+
 def hilo(nombre, fn):
     """Corre fn y, si falla (sensor desconectado, etc.), la reintenta sin tumbar a los demás."""
     def run():
@@ -36,6 +56,7 @@ def hilo(nombre, fn):
                 fn()
             except Exception as e:
                 log.error("[%s] %s, reintentando en 3 s", nombre, e)
+                reportar(nombre, e)
                 time.sleep(3)
     t = threading.Thread(target=run, name=nombre, daemon=True)
     t.start()
@@ -49,6 +70,7 @@ def tarea_huella():
     if not f.verifyPassword():
         raise RuntimeError("contraseña del sensor de huella incorrecta")
     log.info("huella lista (%d plantillas guardadas)", f.getTemplateCount())
+    reportar("huella")
     while True:
         if not f.readImage():
             time.sleep(0.1)
@@ -70,6 +92,7 @@ def tarea_rfid():
         if version in (0x00, 0xFF):
             raise RuntimeError(f"RC522 no responde (VersionReg=0x{version:02X})")
         log.info("RFID listo (VersionReg=0x%02X)", version)
+        reportar("rfid")
         ultimo, t_ultimo, t_salud = None, 0.0, time.monotonic()
         while True:
             uid = lector.leer_uid()
@@ -116,6 +139,7 @@ def tarea_teclado():
 
 def _bucle_teclado(escanear):
     log.info("teclado listo")
+    reportar("teclado")
     pin, previa, t_tecla = "", None, time.monotonic()
     while True:
         tecla = escanear()
@@ -158,6 +182,7 @@ def tarea_reed():
         reed.when_released = lambda: publicar("abierta")
         publicar("cerrada" if reed.is_pressed else "abierta")
         log.info("reed switch listo")
+        reportar("reed")
         threading.Event().wait()                    # los callbacks hacen el trabajo
     finally:
         reed.close()                                # libera GPIO17 si el hilo falla
