@@ -112,6 +112,10 @@ def eliminar_usuario(con, nombre):
         return cur.rowcount == 1
 
 
+def usuario(con, nombre):
+    return con.execute("SELECT * FROM usuarios WHERE nombre=?", (nombre,)).fetchone()
+
+
 def listar_usuarios(con):
     return con.execute(
         "SELECT id, nombre, rfid_uid, pin_hash IS NOT NULL AS tiene_pin, huella_id, activo "

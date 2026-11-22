@@ -6,6 +6,9 @@
 - Un hilo lee la cola de mensajes del reed switch; un mutex/condición protege
   la variable de estado de la puerta, compartida con el hilo del socket.
 - Registra todo en la base de datos (fecha, método, resultado, usuario).
+- Atiende el alta de tarjeta y huella pedida desde la web: la siguiente tarjeta
+  leída se guarda en vez de abrir, y la huella se pide al proceso de entradas
+  por la cola /cerradura_ordenes.
 
 Uso:
     python3 control.py           # con hardware
@@ -15,6 +18,7 @@ import logging
 import os
 import signal
 import socket
+import sqlite3
 import sys
 import threading
 import time
@@ -69,6 +73,10 @@ class Control:
         self.desbloqueada = False
         self.fallos = 0
         self.bloqueado_hasta = 0.0
+        # Registro de tarjeta o huella pedido desde la web. Solo lo usa el hilo del
+        # socket, que atiende una solicitud a la vez: no necesita candado.
+        self.registro = None
+        self._n_registro = 0
         self._gen_pantalla = 0
 
         self._mover(abrir=False)
@@ -130,8 +138,93 @@ class Control:
         db.log(self.con, "sistema", "cerradura bloqueada", detalle="puerta usada" if abrio else "tiempo agotado")
         log.info("cerradura bloqueada")
 
+    # ------------------------------------------------ alta y baja desde la web
+    def registro_activo(self):
+        r = self.registro
+        if r and r["estado"] == "esperando" and time.time() > r["vence"]:
+            r.update(estado="error", mensaje="tiempo agotado")
+            self.pantalla_espera()
+        return bool(r) and r["estado"] == "esperando"
+
+    def iniciar_registro(self, usuario, metodo):
+        if metodo not in ("tarjeta", "huella"):
+            return {"ok": False, "error": f"método desconocido: {metodo}"}
+        if not db.usuario(self.con, usuario):
+            return {"ok": False, "error": "el usuario no existe"}
+        if self.registro_activo():
+            return {"ok": False, "error": "ya hay un registro en curso, espere a que termine"}
+        self._n_registro += 1
+        r = {"id": self._n_registro, "usuario": usuario, "metodo": metodo, "estado": "esperando",
+             "mensaje": "", "valor": None, "vence": time.time() + config.REGISTRO_TIMEOUT_S}
+        if metodo == "huella":
+            try:                                        # el AS608 lo maneja el proceso de entradas
+                ipc.enviar_orden({"orden": "huella_registrar", "id": r["id"], "vence": r["vence"]})
+            except Exception as e:
+                return {"ok": False, "error": f"no se pudo avisar al sensor de huella: {e}"}
+            self.mensaje("REGISTRO DE HUELLA", f"Usuario: {usuario}", "Coloque el dedo",
+                         duracion=config.REGISTRO_TIMEOUT_S)
+        else:
+            self.mensaje("REGISTRO DE TARJETA", f"Usuario: {usuario}", "Acerque la tarjeta",
+                         duracion=config.REGISTRO_TIMEOUT_S)
+        self.registro = r
+        return {"ok": True, "id": r["id"], "segundos": config.REGISTRO_TIMEOUT_S}
+
+    def guardar_credencial(self, campo, valor):
+        r = self.registro
+        anterior = db.usuario(self.con, r["usuario"])
+        try:
+            if not anterior or not db.asignar(self.con, r["usuario"], campo, valor):
+                return self.fallar_registro("el usuario ya no existe")
+        except sqlite3.IntegrityError:
+            return self.fallar_registro("esa tarjeta ya es de otro usuario" if campo == "rfid_uid"
+                                        else "esa huella ya es de otro usuario")
+        if campo == "huella_id" and anterior["huella_id"] not in (None, valor):
+            self.borrar_plantilla(anterior["huella_id"], r["usuario"])     # la huella anterior ya no sirve
+        que = "tarjeta" if campo == "rfid_uid" else "huella"
+        r.update(estado="ok", mensaje=f"{que} registrada", valor=str(valor))
+        db.log(self.con, "web", f"{que} registrada", r["usuario"], f"{campo} {valor}")
+        self.mensaje("REGISTRO EXITOSO", f"{que.capitalize()} guardada", f"Usuario: {r['usuario']}")
+        return {"ok": True, "registro": True, "usuario": r["usuario"]}
+
+    def fallar_registro(self, mensaje):
+        self.registro.update(estado="error", mensaje=mensaje)
+        self.mensaje("REGISTRO FALLIDO", mensaje, duracion=4)
+        return {"ok": False, "motivo": "registro", "mensaje": mensaje}
+
+    def resultado_huella(self, msg):
+        r = self.registro
+        if not (r and r["id"] == msg.get("id") and self.registro_activo()):
+            # llegó tarde: si el sensor sí guardó la plantilla, se borra para no dejarla huérfana
+            if msg.get("ok") and msg.get("huella_id") is not None:
+                self.borrar_plantilla(msg["huella_id"], "registro vencido")
+            return {"ok": False, "error": "registro vencido"}
+        if not msg.get("ok"):
+            return self.fallar_registro(msg.get("mensaje", "error del sensor"))
+        resp = self.guardar_credencial("huella_id", int(msg["huella_id"]))
+        if not resp["ok"]:                              # no se pudo asignar: no dejarla en el sensor
+            self.borrar_plantilla(msg["huella_id"], r["usuario"])
+        return resp
+
+    def borrar_plantilla(self, huella_id, usuario):
+        try:
+            ipc.enviar_orden({"orden": "huella_borrar", "huella_id": huella_id})
+        except Exception as e:
+            db.alerta(self.con, "huella", f"no se pudo borrar la plantilla {huella_id} ({usuario}): {e}", "aviso")
+
+    def baja(self, usuario, admin):
+        fila = db.usuario(self.con, usuario)
+        if not fila:
+            return {"ok": False, "error": "el usuario no existe"}
+        db.eliminar_usuario(self.con, usuario)
+        if fila["huella_id"] is not None:
+            self.borrar_plantilla(fila["huella_id"], usuario)    # también sale del AS608
+        db.log(self.con, "web", "usuario eliminado", admin, usuario)
+        return {"ok": True}
+
     # ------------------------------------------------ autenticación
     def autenticar(self, metodo, valor, t_lectura=None):
+        if metodo == "rfid" and self.registro_activo() and self.registro["metodo"] == "tarjeta":
+            return self.guardar_credencial("rfid_uid", valor)   # se registra, no abre la puerta
         ahora = time.monotonic()
         if ahora < self.bloqueado_hasta:
             resta = int(self.bloqueado_hasta - ahora) + 1
@@ -174,6 +267,22 @@ class Control:
         if tipo == "abrir_remoto":                      # desde la app web
             detalle = self.abrir(msg.get("usuario", "admin"), "remoto", msg.get("t"))
             return {"ok": True, "detalle": detalle}
+        if tipo == "lcd":                               # mensajes del registro de huella
+            self.mensaje(*msg.get("lineas", [])[:4], duracion=msg.get("duracion", 3))
+            return {"ok": True}
+        if tipo == "registrar":                         # desde la app web
+            return self.iniciar_registro(msg.get("usuario"), msg.get("metodo"))
+        if tipo == "registro_estado":
+            self.registro_activo()                      # marca "tiempo agotado" si ya venció
+            r = self.registro
+            if not r or r["id"] != msg.get("id"):
+                return {"ok": False, "error": "registro desconocido"}
+            return {"ok": True, "segundos": max(0, int(r["vence"] - time.time())),
+                    **{k: r[k] for k in ("id", "usuario", "metodo", "estado", "mensaje", "valor")}}
+        if tipo == "registro_resultado":                # de entradas, al terminar con la huella
+            return self.resultado_huella(msg)
+        if tipo == "baja":                              # desde la app web
+            return self.baja(msg.get("usuario"), msg.get("admin"))
         if tipo == "alerta":                            # de entradas o de la web
             db.alerta(self.con, msg.get("origen", "sistema"), msg.get("mensaje", ""), msg.get("nivel", "aviso"))
             return {"ok": True}
