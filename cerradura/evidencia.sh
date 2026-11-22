@@ -1,6 +1,7 @@
 #!/bin/bash
-# Junta en un archivo la evidencia de terminal para el reporte del Avance 3:
-# arranque, prioridades, drivers (clase 21), registros y tipos (clase 20) y la medición de latencia.
+# Junta en un archivo la evidencia de terminal para los reportes:
+# arranque, prioridades, drivers (clase 21), registros y tipos (clase 20), medición de latencia,
+# y del Avance 4: alertas, cola de órdenes de huella y respaldos.
 # Uso, en la Raspberry con los servicios corriendo:   sudo ./evidencia.sh
 # Resultado: evidencia_<fecha>.log en la carpeta actual.
 set -u
@@ -34,14 +35,15 @@ PID_CTL=$(pgrep -f "control.py" | head -1)
 t "IPC (bitácora clase 11): socket y cola de mensajes"
 c "ls -l /tmp/cerradura_control.sock"
 c "ls -l /dev/mqueue/ && cat /dev/mqueue/cerradura_puerta"
+c "cat /dev/mqueue/cerradura_ordenes"
 
 t "Clase 21: drivers del kernel y nodos en /dev"
 c "lsmod | grep -E 'i2c|spi|bcm2835|unicam|ov5647|videodev' "
 c "ls -l /dev/i2c-1 /dev/spidev0.0 /dev/gpiochip0 /dev/serial0 /dev/ttyAMA0 /dev/video0"
 c "readlink -f /dev/serial0"
 c "i2cdetect -y 1"
-c "printf 'I2C1 a %d Hz\n' 0x\$(od -An -tx1 /sys/class/i2c-adapter/i2c-1/of_node/clock-frequency | tr -d ' \\n')"
-c "gpioinfo gpiochip0 | grep -E 'line +(5|6|12|13|16|17|19|20|21):'"
+c "printf 'I2C1 a %d Hz\n' 0x\$(od -An -tx1 /sys/firmware/devicetree/base/soc/i2c@7e804000/clock-frequency | tr -d ' \\n')"
+c "(gpioinfo -c gpiochip0 2>/dev/null || gpioinfo gpiochip0) | grep -E 'line +(5|6|12|13|16|17|19|20|21):'"
 c "dmesg | grep -iE 'ov5647|unicam|spi|ttyAMA|i2c' | tail -n 15"
 c "rpicam-hello --list-cameras 2>&1 | head -n 8"
 
@@ -66,5 +68,14 @@ c "cd $APP && $PY admin.py estado"
 t "Base de datos"
 c "ls -l /var/lib/cerradura"
 c "$PY -c \"import sys; sys.path.insert(0,'$APP'); import db; c=db.conectar(); print(c.execute('select count(*) from logs').fetchone()[0], 'eventos'); print(c.execute('select count(*) from usuarios').fetchone()[0], 'usuarios')\""
+
+t "Avance 4: alertas"
+c "$PY -c \"import sys; sys.path.insert(0,'$APP'); import db; c=db.conectar(); print(db.alertas_pendientes(c), 'alertas sin revisar'); [print(a['fecha'], a['nivel'], a['origen'], a['mensaje']) for a in db.ultimas_alertas(c, 10)]\""
+
+t "Avance 4: respaldos (sin UPS, protegen de una microSD dañada)"
+c "systemctl list-timers cerradura-respaldo.timer --no-pager"
+c "findmnt /mnt/respaldo || echo 'sin memoria USB'"
+c "cd $APP && $PY admin.py respaldos"
+c "journalctl -u cerradura-respaldo -n 5 --no-pager"
 
 echo "Evidencia guardada en $SALIDA"

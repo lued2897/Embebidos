@@ -6,7 +6,8 @@ Arquitectura:
 - Python 3
 
 Acceso con tarjeta RFID, PIN o huella; servomotor por PWM de hardware; LCD de estado;
-sensor de puerta; app web con video en vivo, apertura remota e historial.
+sensor de puerta; app web con video en vivo, apertura remota, alertas, historial, alta y
+baja de usuarios (con tarjeta y/o huella) y respaldos.
 
 ![Diagrama de bloques](img/diagrama_v3.jpeg)
 
@@ -14,20 +15,23 @@ sensor de puerta; app web con video en vivo, apertura remota e historial.
 
 | Proceso (servicio) | Archivo | Qué hace | nice |
 |---|---|---|---|
-| `cerradura-control` | `control.py` | Valida credenciales, mueve el servo (PCA9685), LCD, logs, bloqueo por intentos | -10 |
-| `cerradura-entradas` | `entradas.py` | Un hilo por sensor: huella (UART), RFID (SPI), teclado (GPIO), reed (GPIO) | -5 |
+| `cerradura-control` | `control.py` | Valida credenciales, mueve el servo (PCA9685), LCD, logs, alertas, bloqueo por intentos, registro de tarjeta y huella | -10 |
+| `cerradura-entradas` | `entradas.py` | Un hilo por sensor: huella (UART), RFID (SPI), teclado (GPIO), reed (GPIO); el de la huella también registra y borra plantillas | -5 |
 | `cerradura-web` | `web/app.py` | App web en el puerto 8000; la cámara (`rpicam-vid`) entra por un pipe con nice +10 | 0 |
+| `cerradura-respaldo` (timer) | `respaldo.py` | Respaldo diario de la base a la tarjeta y a una memoria USB | +10 |
 
 Comunicación: entradas y web → control por **socket UNIX** (`/tmp/cerradura_control.sock`, una
 solicitud a la vez); reed → control por **cola de mensajes POSIX** (`/cerradura_puerta`);
-cámara → web por **pipe**. Usuarios y logs en SQLite (`/var/lib/cerradura/cerradura.db`).
+control → entradas por otra **cola POSIX** (`/cerradura_ordenes`: registrar o borrar una huella);
+cámara → web por **pipe**. Usuarios, logs y alertas en SQLite (`/var/lib/cerradura/cerradura.db`).
 
 | Archivo | Función |
 |---|---|
 | `config.py` | Pines, direcciones I2C, tiempos, prioridades |
 | `db.py` | SQLite (WAL + synchronous=FULL); PIN con HMAC-SHA256, contraseñas web con scrypt |
-| `ipc.py` | Socket UNIX y cola de mensajes |
-| `admin.py` | Usuarios, PIN, tarjeta, huella, administradores web, logs, medición |
+| `ipc.py` | Socket UNIX y colas de mensajes |
+| `admin.py` | Usuarios, PIN, tarjeta, huella, administradores web, logs, medición, respaldos |
+| `respaldo.py` | Respaldo y restauración de la base y de la llave de los PIN |
 | `hw/` | Drivers propios: `pca9685.py`, `lcd.py` (PCF8574), `rc522.py` |
 | `camara.py` | Lee el video MJPEG de `rpicam-vid` por un pipe |
 | `web/` | `app.py` (Flask), `templates/`, `static/` (estilo y fuente Nunito, licencia OFL) |
@@ -61,7 +65,7 @@ En una Raspberry Pi OS recién instalada:
 
 ```bash
 git clone https://github.com/lued2897/Embebidos && cd Embebidos/cerradura
-git checkout v0.3                      # versión de este avance
+git checkout v4.0                      # versión de este avance
 sudo ./instalar.sh                     # buses, paquetes, venv, servicios
 sudo reboot
 i2cdetect -y 1                         # debe mostrar 40 (PCA9685) y 27 (LCD)
@@ -73,9 +77,15 @@ solos al encender y se reinician en 2 s si se caen.
 
 ## Registrar usuarios
 
+Desde la app web, en **Usuarios**: se agrega el nombre (y PIN, opcional) y luego **Registrar**
+tarjeta o huella. Hay 30 s para acercar la tarjeta o poner el dedo dos veces, siguiendo el LCD.
+**Eliminar** borra al usuario y también su huella del sensor AS608.
+
+Por consola (con el proceso de entradas detenido, porque usa los lectores):
+
 ```bash
 cd /opt/cerradura
-sudo systemctl stop cerradura-entradas          # tarjeta y huella usan los lectores
+sudo systemctl stop cerradura-entradas
 sudo venv/bin/python admin.py agregar claudio
 sudo venv/bin/python admin.py pin claudio
 sudo venv/bin/python admin.py tarjeta claudio
@@ -83,12 +93,45 @@ sudo venv/bin/python admin.py huella claudio
 sudo systemctl start cerradura-entradas
 ```
 
-También se pueden dar de alta nombre y PIN desde la app web (Usuarios).
-
 ## App web
 
-`http://<ip-de-la-pi>:8000` desde la red local. 5 intentos fallidos bloquean el login 60 s. Panel: estado de la puerta (cada 500 ms), apertura remota,
-video en vivo y últimos eventos.
+`http://<ip-de-la-pi>:8000` desde la red local. 5 intentos fallidos bloquean el login 60 s.
+
+| Página | Qué muestra |
+|---|---|
+| Panel | Estado de la puerta, apertura remota, video en vivo, alertas y últimos eventos |
+| Alertas | Todas las alertas con su nivel; se marcan como vistas |
+| Historial | Eventos con búsqueda por texto y por método |
+| Usuarios | Alta y baja; registro de tarjeta, huella y PIN |
+| Respaldos | Respaldos guardados, si están íntegros y botón para respaldar ahora |
+
+## Alertas
+
+| Alerta | Nivel | Quién la genera |
+|---|---|---|
+| Puerta abierta sin autorización | crítica | control (reed sin apertura concedida) |
+| Puerta abierta más de 60 s | aviso | control (`PUERTA_ABIERTA_ALERTA_S`) |
+| Bloqueo por 5 intentos fallidos | crítica | control |
+| Sensor que deja de responder / vuelve | crítica / info | entradas (una alerta por cambio) |
+| Login web bloqueado | aviso | web |
+| Respaldo fallido | crítica o aviso | respaldo |
+
+## Respaldos
+
+Sin UPS, un corte de luz puede dañar la microSD. Cada día a las 3:30 (o al encender, si la Pi
+estaba apagada) `cerradura-respaldo.timer` copia la base y la llave de los PIN a
+`/var/lib/cerradura/respaldos` y, si está conectada, a una memoria USB con etiqueta `CERRADURA`
+(se monta en `/mnt/respaldo`). Se guardan los últimos 7 de cada lugar, cada uno con su SHA-256.
+
+```bash
+sudo venv/bin/python admin.py respaldar        # ahora (también desde la app: Respaldos)
+sudo venv/bin/python admin.py respaldos        # lista
+sudo systemctl stop cerradura-web cerradura-entradas cerradura-control
+sudo venv/bin/python admin.py restaurar /mnt/respaldo/cerradura/respaldo_AAAAMMDD_HHMMSS
+sudo systemctl start cerradura-control cerradura-entradas cerradura-web
+```
+
+Antes de restaurar se guarda la base actual en `respaldos/antes_de_restaurar_<fecha>`.
 
 ## Pruebas, mediciones y fallas inducidas
 
@@ -115,5 +158,6 @@ CERRADURA_DATA=./datos python3 entradas.py --sim     # terminal 2
 
 | Etiqueta | Avance |
 |---|---|
-| `v0.2` | Módulo de entradas y control |
-| `v0.3` | Sistema completo: huella, cámara, app web, prioridades |
+| `v2.0` | Módulo de entradas y control |
+| `v3.0` | Sistema completo: huella, cámara, app web, prioridades |
+| `v4.0` | Alertas, alta y baja completas desde la web, respaldos |
