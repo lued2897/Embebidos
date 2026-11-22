@@ -1,0 +1,11 @@
+[Unit]
+Description=Cerradura - respaldo diario de la base de datos
+
+[Timer]
+OnCalendar=*-*-* 03:30:00
+# Si la Pi estaba apagada a esa hora (sin UPS), el respaldo se hace al encender
+Persistent=true
+RandomizedDelaySec=10min
+
+[Install]
+WantedBy=timers.target

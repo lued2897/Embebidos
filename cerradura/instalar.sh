@@ -30,12 +30,20 @@ cp -r ./*.py hw web /opt/cerradura/
 /opt/cerradura/venv/bin/pip install -r requirements.txt
 
 # 4) Servicios: arrancan solos al encender
-cp systemd/*.service /etc/systemd/system/
+cp systemd/*.service systemd/*.timer /etc/systemd/system/
 systemctl daemon-reload
 systemctl enable cerradura-control cerradura-entradas cerradura-web
+systemctl enable --now cerradura-respaldo.timer             # respaldo diario de la base
+
+# 5) Memoria USB para respaldos (opcional): formatearla con la etiqueta CERRADURA.
+#    nofail: si no está conectada, la Pi arranca igual y el respaldo queda solo en la tarjeta.
+mkdir -p /mnt/respaldo
+grep -q "LABEL=CERRADURA" /etc/fstab || \
+  echo "LABEL=CERRADURA /mnt/respaldo auto defaults,nofail,noatime,x-systemd.device-timeout=5s 0 2" >> /etc/fstab
 
 echo
 echo "Listo. Falta:"
 echo "  1) sudo reboot"
 echo "  2) cd /opt/cerradura && sudo venv/bin/python admin.py web-admin <usuario>"
 echo "  3) Abrir http://$(hostname -I | awk '{print $1}'):8000 desde la red local"
+echo "  4) (Opcional) Conectar una memoria USB con etiqueta CERRADURA para los respaldos"

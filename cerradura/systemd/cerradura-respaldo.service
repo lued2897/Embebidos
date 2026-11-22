@@ -1,0 +1,11 @@
+[Unit]
+Description=Cerradura - respaldo de la base de datos
+After=local-fs.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/cerradura
+ExecStart=/opt/cerradura/venv/bin/python respaldo.py
+# Corre con la prioridad más baja de CPU y de disco: nunca retrasa a la cerradura
+Nice=10
+IOSchedulingClass=idle

@@ -5,6 +5,11 @@ import os
 DATA_DIR = os.environ.get("CERRADURA_DATA", "/var/lib/cerradura")
 DB_PATH = os.path.join(DATA_DIR, "cerradura.db")
 PEPPER_PATH = os.path.join(DATA_DIR, "pepper.key")   # llave secreta para el hash de PINs
+
+# ---------------- Respaldo (riesgo del Avance 1: corrupción de la microSD sin UPS) ----------------
+RESPALDO_LOCAL = os.path.join(DATA_DIR, "respaldos")  # en la misma tarjeta: protege de una base dañada
+RESPALDO_USB = "/mnt/respaldo"                        # memoria USB con etiqueta CERRADURA: protege si falla la tarjeta
+RESPALDO_CONSERVAR = 7                                # respaldos que se guardan en cada destino
 WEB_SECRET_PATH = os.path.join(DATA_DIR, "web.key")  # llave para firmar las sesiones web
 
 # ---------------- IPC (bitácora clase 11) ----------------
