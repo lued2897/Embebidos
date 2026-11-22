@@ -59,6 +59,7 @@ NICE_HILO_LCD = 10                   # desplazamiento del display: baja
 
 # ---------------- Lógica de control ----------------
 TIEMPO_ABIERTO_S = 8                 # si nadie abre la puerta, se vuelve a cerrar
+PUERTA_ABIERTA_ALERTA_S = 60         # alerta si la puerta se queda abierta más de 60 s
 MAX_INTENTOS = 5                     # intentos fallidos seguidos antes del bloqueo
 BLOQUEO_S = 30
 

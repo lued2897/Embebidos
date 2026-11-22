@@ -198,12 +198,28 @@ class Control:
             if estado == previo:
                 continue
             forzada = estado == "abierta" and not self.desbloqueada
-            db.log(self.con, "puerta", estado, detalle="ALERTA: abierta sin autorizacion" if forzada else None)
+            db.log(self.con, "puerta", estado)
             log.info("puerta %s%s", estado, " (sin autorizacion)" if forzada else "")
             if forzada:
+                db.alerta(self.con, "puerta", "abierta sin autorización", "critica")
                 self.mensaje("ALERTA", "Puerta abierta sin", "autorizacion", duracion=5)
             else:
                 self.lcd_linea_puerta()
+
+    def vigilar_puerta(self):
+        """Alerta una vez si la puerta se queda abierta más de PUERTA_ABIERTA_ALERTA_S.
+        Espera con la misma Condition que el hilo del reed: no sondea."""
+        limite = config.PUERTA_ABIERTA_ALERTA_S
+        while True:
+            with self.cambio_puerta:
+                self.cambio_puerta.wait_for(lambda: self.estado_puerta == "abierta")
+                cerro = self.cambio_puerta.wait_for(lambda: self.estado_puerta != "abierta", timeout=limite)
+            if cerro:
+                continue
+            db.alerta(self.con, "puerta", f"lleva más de {limite} s abierta", "aviso")
+            self.mensaje("AVISO", "La puerta sigue", "abierta", "Cierrela por favor", duracion=5)
+            with self.cambio_puerta:                    # una sola alerta hasta que la cierren
+                self.cambio_puerta.wait_for(lambda: self.estado_puerta != "abierta")
 
     def lcd_linea_puerta(self):
         if not hasattr(self.lcd, "linea"):
@@ -215,6 +231,7 @@ class Control:
     # ------------------------------------------------ servidor
     def servir(self):
         threading.Thread(target=self.hilo_puerta, name="reed", daemon=True).start()
+        threading.Thread(target=self.vigilar_puerta, name="vigia", daemon=True).start()
         if os.path.exists(config.SOCKET_PATH):
             os.unlink(config.SOCKET_PATH)
         # Bitácora clase 11: socket UNIX; las solicitudes se atienden una por una (FIFO).
