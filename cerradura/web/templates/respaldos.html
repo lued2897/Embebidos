@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block titulo %}Respaldos{% endblock %}
+{% block contenido %}
+<div class="rejilla">
+<section class="tarjeta">
+  <h2>Respaldo de la información</h2>
+  <div class="dato"><span>Frecuencia:</span><b>diario, 3:30 a. m.</b></div>
+  <div class="dato"><span>Memoria USB</span><b class="{{ 'ok' if usb else 'mal' }}">{{ 'conectada' if usb else 'no conectada' }}</b></div>
+  <form method="post">
+    <input type="hidden" name="csrf" value="{{ csrf() }}">
+    <button class="boton oro ancho">Respaldar ahora</button>
+  </form>
+  <p class="suave"></p>
+</section>
+<section class="tarjeta">
+  <h2>Respaldos guardados</h2>
+  <div class="tabla angosta"><table>
+    <tr><th>Fecha</th><th>Dónde</th><th>Usuarios</th><th>Eventos</th><th>Tamaño</th><th>Estado</th></tr>
+    {% for r in respaldos %}{% set i = r.info or {} %}<tr>
+      <td>{{ i.fecha or r.nombre }}</td><td>{{ r.destino }}</td>
+      <td>{{ i.conteo.usuarios if i.conteo else '?' }}</td><td>{{ i.conteo.logs if i.conteo else '?' }}</td>
+      <td>{{ ((i.bytes or 0) / 1024)|round(1) }} KB</td>
+      <td><span class="etiqueta {{ 'concedido' if r.integro else 'denegado' }}">{{ 'íntegro' if r.integro else 'dañado' }}</span></td>
+    </tr>{% else %}<tr><td colspan="6" class="suave">Todavía no hay respaldos.</td></tr>{% endfor %}
+  </table></div>
+</section>
+</div>
+{% endblock %}

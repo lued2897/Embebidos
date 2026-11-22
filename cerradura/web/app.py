@@ -29,6 +29,7 @@ from flask import (Flask, Response, abort, flash, g, jsonify, redirect,  # noqa:
 import config  # noqa: E402
 import db  # noqa: E402
 import ipc  # noqa: E402
+import respaldo  # noqa: E402
 from camara import Camara  # noqa: E402
 
 log = logging.getLogger("web")
@@ -283,6 +284,34 @@ def api_registro():
 @requiere_sesion
 def api_registro_estado(rid):
     return jsonify(ipc.enviar({"tipo": "registro_estado", "id": rid}, timeout=1.0))
+
+
+# ---------------------------------------------------------------- respaldos
+@app.get("/respaldos")
+@requiere_sesion
+def respaldos():
+    lista = respaldo.listar()
+    for r in lista:
+        try:
+            respaldo.verificar(r["ruta"])
+            r["integro"] = True
+        except Exception:
+            r["integro"] = False
+    return render_template("respaldos.html", usuario=session["usuario"], respaldos=lista,
+                           usb=os.path.ismount(config.RESPALDO_USB), conservar=config.RESPALDO_CONSERVAR)
+
+
+@app.post("/respaldos")
+@requiere_sesion
+def respaldar_ahora():
+    try:
+        hechos = respaldo.respaldar()
+        db.log(con(), "web", "respaldo manual", session["usuario"], f"{len(hechos)} destinos")
+        flash("Respaldo hecho en " + " y ".join("la memoria USB" if r.startswith(config.RESPALDO_USB)
+                                                 else "la tarjeta" for r, _ in hechos) + ".")
+    except Exception as e:
+        flash(f"No se pudo respaldar: {e}")
+    return redirect(url_for("respaldos"))
 
 
 def main():

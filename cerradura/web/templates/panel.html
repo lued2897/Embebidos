@@ -58,7 +58,7 @@ async function estado() {
     if (!e.ok) { $("aviso").textContent = "Sin conexión con el proceso de control"; return; }
     $("aviso").textContent = e.bloqueado ? "Sistema bloqueado por intentos fallidos" : "";
     $("puerta").textContent = e.puerta;
-    $("puerta").className = "grande " + (e.puerta === "cerrada" ? "ok" : "mal");
+    $("puerta").className = "grande " + (e.puerta === "abierta" && e.desbloqueada ? "ok" : "mal");  // verde solo si se abrió con permiso
     $("cerradura").textContent = e.desbloqueada ? "abierta" : "cerrada";
     if (e.alertas !== alertasMostradas) recargarAlertas(e.alertas);
     if (e.camara && $("camara")) $("camara").textContent = e.camara.error ? "Error: " + e.camara.error : "";

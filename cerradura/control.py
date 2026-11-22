@@ -307,7 +307,7 @@ class Control:
             if estado == previo:
                 continue
             forzada = estado == "abierta" and not self.desbloqueada
-            db.log(self.con, "puerta", estado)
+            db.log(self.con, "puerta", estado, detalle="sin autorización" if forzada else None)
             log.info("puerta %s%s", estado, " (sin autorizacion)" if forzada else "")
             if forzada:
                 db.alerta(self.con, "puerta", "abierta sin autorización", "critica")

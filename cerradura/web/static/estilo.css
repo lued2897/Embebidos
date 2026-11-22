@@ -119,9 +119,8 @@ td { padding: 8px; border-bottom: 1px solid var(--borde); vertical-align: top; }
 td:first-child { white-space: nowrap; font-variant-numeric: tabular-nums; }
 tr:hover td { background: #f6f8fc; }
 .etiqueta { font-weight: 800; font-size: 13px; }
-/* r-: prefijo para que un resultado como "tarjeta registrada" no tome el estilo de .tarjeta */
-.etiqueta.r-concedido, .etiqueta.r-cerrada, .etiqueta.r-ok { color: var(--ok); }
-.etiqueta.r-denegado, .etiqueta.r-bloqueo, .etiqueta.r-alerta { color: var(--mal); }
+.etiqueta.r-concedido, .etiqueta.r-abierta, .etiqueta.r-ok { color: var(--ok); }
+.etiqueta.r-denegado, .etiqueta.r-bloqueo, .etiqueta.r-alerta, .etiqueta.r-cerrada, .etiqueta.r-forzada { color: var(--mal); }
 
 /* alertas */
 .insignia { display: inline-block; min-width: 20px; padding: 0 6px; margin-left: 2px; border-radius: 10px;

@@ -12,6 +12,9 @@
     python3 admin.py estado
     python3 admin.py web-admin <usuario>          # crea o cambia un administrador de la app web
     python3 admin.py medir    [n]                 # latencia credencial -> servo de las últimas n aperturas
+    python3 admin.py respaldar                    # respaldo de la base ahora (también lo hace el timer diario)
+    python3 admin.py respaldos                    # lista los respaldos de la tarjeta y de la USB
+    python3 admin.py restaurar <carpeta>          # con los servicios detenidos
 
 Para 'tarjeta' (sin UID) y 'huella' deténer antes el proceso de entradas: 
     sudo systemctl stop cerradura-entradas
@@ -134,6 +137,28 @@ def main():
             db.crear_admin(con, args[0], pw)
             print(f"Administrador web '{args[0]}' guardado")
 
+        elif cmd == "respaldar":
+            import respaldo
+            for ruta, info in respaldo.respaldar():
+                print(f"{ruta}  ({info['conteo']['logs']} eventos, {info['bytes']} bytes)")
+
+        elif cmd == "respaldos":
+            import respaldo
+            for r in respaldo.listar():
+                i = r["info"] or {}
+                print(f"{r['nombre']:<28} {r['destino']:<8} {i.get('conteo', {}).get('usuarios', '?'):>3} usuarios "
+                      f"{i.get('conteo', {}).get('logs', '?'):>6} eventos   {r['ruta']}")
+
+        elif cmd == "restaurar":
+            import respaldo
+            con.close()                             # la base se va a reemplazar
+            info, previo = respaldo.restaurar(args[0], forzar="--forzar" in args)
+            print(f"Restaurado el respaldo del {info['fecha']} ({info['conteo']['usuarios']} usuarios, "
+                  f"{info['conteo']['logs']} eventos)")
+            if previo:
+                print(f"La base anterior quedó en {previo}")
+            print("Ahora: sudo systemctl start cerradura-control cerradura-entradas cerradura-web")
+
         elif cmd == "medir":
             import statistics
             datos = db.latencias(con, int(args[0]) if args else 200)
@@ -153,6 +178,8 @@ def main():
         sys.exit(__doc__)
     except sqlite3.IntegrityError as e:
         sys.exit(f"Dato repetido: {e}")
+    except RuntimeError as e:
+        sys.exit(f"ERROR: {e}")
 
 
 if __name__ == "__main__":

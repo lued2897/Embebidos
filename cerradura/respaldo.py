@@ -16,6 +16,8 @@ Cada respaldo es una carpeta respaldo_AAAAMMDD_HHMMSS con:
 
 Uso:
     python3 respaldo.py            # hace un respaldo (lo corre el timer de systemd)
+    python3 admin.py respaldos     # lista los respaldos
+    python3 admin.py restaurar <carpeta>   # con los servicios detenidos
 """
 import hashlib
 import json
@@ -139,6 +141,72 @@ def respaldar():
     if not hechos:
         raise RuntimeError("; ".join(errores))
     return hechos
+
+
+def listar():
+    """Todos los respaldos, del más nuevo al más viejo."""
+    salida = []
+    for carpeta in destinos():
+        for nombre in listar_en(carpeta):
+            ruta = os.path.join(carpeta, nombre)
+            try:
+                with open(os.path.join(ruta, "info.json")) as f:
+                    info = json.load(f)
+            except (OSError, ValueError):
+                info = None
+            salida.append({"ruta": ruta, "nombre": nombre, "info": info,
+                           "destino": "USB" if ruta.startswith(config.RESPALDO_USB) else "tarjeta"})
+    return sorted(salida, key=lambda r: r["nombre"], reverse=True)
+
+
+def verificar(ruta):
+    """Revisa que la copia sea la misma que se guardó (SHA-256) y que SQLite la acepte."""
+    with open(os.path.join(ruta, "info.json")) as f:
+        info = json.load(f)
+    base = os.path.join(ruta, "cerradura.db")
+    if sha256(base) != info["sha256"]:
+        raise RuntimeError("la copia no coincide con su SHA-256: está dañada")
+    con = sqlite3.connect(f"file:{base}?mode=ro", uri=True)
+    try:
+        if con.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
+            raise RuntimeError("la copia no pasa integrity_check")
+    finally:
+        con.close()
+    return info
+
+
+def restaurar(ruta, forzar=False):
+    """Pone un respaldo como base actual. Antes guarda la base actual en
+    respaldos/antes_de_restaurar_<fecha> por si hay que regresar."""
+    if os.path.exists(config.SOCKET_PATH) and not forzar:
+        raise RuntimeError("primero detenga los servicios: "
+                           "sudo systemctl stop cerradura-web cerradura-entradas cerradura-control")
+    info = verificar(ruta)
+    previo = None
+    if os.path.exists(config.DB_PATH):
+        previo = os.path.join(config.RESPALDO_LOCAL, "antes_de_restaurar_" + datetime.now().strftime("%Y%m%d_%H%M%S"))
+        os.makedirs(previo, mode=0o700)
+        try:
+            _copiar_base(os.path.join(previo, "cerradura.db"))
+        except Exception:                           # la base actual está dañada: se copia tal cual
+            for ext in ("", "-wal", "-shm"):
+                if os.path.exists(config.DB_PATH + ext):
+                    shutil.copyfile(config.DB_PATH + ext, os.path.join(previo, "cerradura.db" + ext))
+        if os.path.exists(config.PEPPER_PATH):
+            shutil.copyfile(config.PEPPER_PATH, os.path.join(previo, "pepper.key"))
+    for origen, destino in (("cerradura.db", config.DB_PATH), ("pepper.key", config.PEPPER_PATH)):
+        if not os.path.exists(os.path.join(ruta, origen)):
+            continue
+        tmp = destino + ".restaurando"
+        shutil.copyfile(os.path.join(ruta, origen), tmp)
+        os.chmod(tmp, 0o600)
+        _fsync(tmp)
+        os.replace(tmp, destino)                    # temporal + fsync + rename
+    for ext in ("-wal", "-shm"):                    # eran de la base anterior
+        if os.path.exists(config.DB_PATH + ext):
+            os.remove(config.DB_PATH + ext)
+    _fsync(config.DATA_DIR)
+    return info, previo
 
 
 def main():
