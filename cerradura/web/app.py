@@ -49,6 +49,8 @@ def llave_sesiones():
         return f.read()
 
 
+HTTPS = os.path.exists(config.WEB_CERT) and os.path.exists(config.WEB_CERT_KEY)
+
 app = Flask(__name__)
 app.config.update(
     SECRET_KEY=llave_sesiones(),
@@ -56,6 +58,7 @@ app.config.update(
     SESSION_REFRESH_EACH_REQUEST=True,                 # cada petición renueva los 10 min
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE="Strict",
+    SESSION_COOKIE_SECURE=HTTPS,                       
 )
 camara = Camara() if config.CAMARA_ACTIVA else None
 
@@ -319,7 +322,10 @@ def main():
     with db.conectar() as c:
         if not db.hay_admins(c):
             log.warning("no hay administradores web: créelo con  admin.py web-admin <usuario>")
-    app.run(host="0.0.0.0", port=config.WEB_PUERTO, threaded=True)
+    if not HTTPS:
+        log.warning("sin certificado en %s: la app va por HTTP; corre instalar.sh para HTTPS", config.WEB_CERT)
+    app.run(host="0.0.0.0", port=config.WEB_PUERTO, threaded=True,
+            ssl_context=(config.WEB_CERT, config.WEB_CERT_KEY) if HTTPS else None)
 
 
 if __name__ == "__main__":

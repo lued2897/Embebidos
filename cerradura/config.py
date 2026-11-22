@@ -11,6 +11,8 @@ RESPALDO_LOCAL = os.path.join(DATA_DIR, "respaldos")  # en la misma tarjeta: pro
 RESPALDO_USB = "/mnt/respaldo"                        # memoria USB con etiqueta CERRADURA: protege si falla la tarjeta
 RESPALDO_CONSERVAR = 7                                # respaldos que se guardan en cada destino
 WEB_SECRET_PATH = os.path.join(DATA_DIR, "web.key")  # llave para firmar las sesiones web
+WEB_CERT = os.path.join(DATA_DIR, "https.crt")      # certificado HTTPS (lo genera instalar.sh)
+WEB_CERT_KEY = os.path.join(DATA_DIR, "https.key")  # llave privada del certificado
 
 # ---------------- IPC (bitácora clase 11) ----------------
 SOCKET_PATH = "/tmp/cerradura_control.sock"           # entradas/web -> control (FIFO, una solicitud a la vez)

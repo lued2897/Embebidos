@@ -18,7 +18,7 @@ sed -i 's/console=serial0,[0-9]* //' "$CMD"                    # la consola tamp
 
 # 2) Paquetes del sistema
 apt-get update
-apt-get install -y python3-venv python3-dev i2c-tools gpiod swig liblgpio-dev
+apt-get install -y python3-venv python3-dev i2c-tools gpiod swig liblgpio-dev openssl
 apt-get install -y rpicam-apps-lite || apt-get install -y libcamera-apps-lite || \
   echo "AVISO: instala rpicam-apps para la cámara"
 
@@ -28,6 +28,15 @@ chmod 700 /var/lib/cerradura
 cp -r ./*.py hw web /opt/cerradura/
 [ -d /opt/cerradura/venv ] || python3 -m venv /opt/cerradura/venv
 /opt/cerradura/venv/bin/pip install -r requirements.txt
+
+# HTTPS: certificado autofirmado (10 años) para la app web; se genera una sola vez
+if [ ! -f /var/lib/cerradura/https.crt ]; then
+  IP=$(hostname -I | awk '{print $1}')
+  openssl req -x509 -newkey rsa:2048 -nodes -days 3650 -subj "/CN=cerradura" \
+    -addext "subjectAltName=IP:${IP:-127.0.0.1},DNS:$(hostname).local,DNS:localhost" \
+    -keyout /var/lib/cerradura/https.key -out /var/lib/cerradura/https.crt
+  chmod 600 /var/lib/cerradura/https.key
+fi
 
 # 4) Servicios: arrancan solos al encender
 cp systemd/*.service systemd/*.timer /etc/systemd/system/
@@ -45,5 +54,5 @@ echo
 echo "Listo. Falta:"
 echo "  1) sudo reboot"
 echo "  2) cd /opt/cerradura && sudo venv/bin/python admin.py web-admin <usuario>"
-echo "  3) Abrir http://$(hostname -I | awk '{print $1}'):8000 desde la red local"
+echo "  3) Abrir https://$(hostname -I | awk '{print $1}'):8000 desde la red local (aceptar el aviso del certificado)"
 echo "  4) (Opcional) Conectar una memoria USB con etiqueta CERRADURA para los respaldos"
