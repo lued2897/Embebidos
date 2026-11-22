@@ -307,7 +307,7 @@ class Control:
             if estado == previo:
                 continue
             forzada = estado == "abierta" and not self.desbloqueada
-            db.log(self.con, "puerta", estado, detalle="sin autorización" if forzada else None)
+            db.log(self.con, "puerta", estado)
             log.info("puerta %s%s", estado, " (sin autorizacion)" if forzada else "")
             if forzada:
                 db.alerta(self.con, "puerta", "abierta sin autorización", "critica")
@@ -369,6 +369,17 @@ class Control:
             srv.close()
             if os.path.exists(config.SOCKET_PATH):
                 os.unlink(config.SOCKET_PATH)
+            self.apagar_lcd()
+
+    def apagar_lcd(self):
+        """Al salir (systemctl stop o Ctrl+C) deja el LCD limpio y sin luz."""
+        try:
+            if hasattr(self.lcd, "apagar"):
+                self.lcd.apagar()
+            else:
+                self.lcd.mostrar()                      # simulado: pantalla en blanco
+        except OSError as e:
+            log.warning("no se pudo limpiar el LCD: %s", e)
 
 
 def main():

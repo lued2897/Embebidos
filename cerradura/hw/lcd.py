@@ -24,6 +24,7 @@ class LCD:
         self.lock = threading.Lock()
         self._texto = [""] * filas         # texto completo de cada fila
         self._pos = [0] * filas            # posición del scroll en cada fila
+        self._apagada = False              # tras apagar() ya no se escribe nada
         time.sleep(0.05)
         for _ in range(3):
             self._write4(0x30)
@@ -92,7 +93,7 @@ class LCD:
 
     def linea(self, fila, texto):
         with self.lock:
-            if texto == self._texto[fila]:
+            if self._apagada or texto == self._texto[fila]:
                 return                                # sin cambios: no reinicia el scroll
             self._texto[fila] = texto
             self._pos[fila] = 0
@@ -101,6 +102,16 @@ class LCD:
     def mostrar(self, *lineas):
         for i in range(self.filas):
             self.linea(i, lineas[i] if i < len(lineas) else "")
+
+    def apagar(self):
+        """Limpia la pantalla y apaga la luz de fondo (al salir del programa)."""
+        with self.lock:
+            self._apagada = True
+            self._texto = [""] * self.filas
+            self._cmd(0x01)                          # borra la pantalla
+            time.sleep(0.002)
+            self._cmd(0x08)                          # display apagado
+            self.bus.write_byte(self.addr, 0x00)     # sin el bit BL: luz de fondo apagada
 
     def close(self):
         self.bus.close()
