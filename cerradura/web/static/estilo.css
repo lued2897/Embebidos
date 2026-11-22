@@ -144,6 +144,20 @@ tr:hover td { background: #f6f8fc; }
 .nivel.nivel-critica { color: var(--mal); } .nivel.nivel-aviso { color: var(--oro-hondo); } .nivel.nivel-info { color: var(--azul); }
 tr.nueva td { font-weight: 700; }
 
+/* usuarios: registro de tarjeta y huella */
+.tabla.usuarios table { min-width: 520px; }
+.celda { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+.enlace { background: none; border: 0; padding: 0; color: var(--azul); font: 700 13px "Nunito", sans-serif;
+          text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.enlace:disabled { color: var(--suave); cursor: default; text-decoration: none; }
+.registro { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; border-radius: 10px;
+            padding: 12px 14px; margin-bottom: 16px; border: 1px solid var(--borde); border-left: 5px solid var(--oro); }
+.registro[hidden] { display: none; }
+.registro.ok { border-left-color: var(--ok); background: #eef7f1; }
+.registro.error { border-left-color: var(--mal); background: #fdf3f2; }
+.registro.esperando { background: #fbf3dc; }
+.rejilla.separada { margin-top: 20px; }
+
 /* video */
 .video { display: block; width: 100%; aspect-ratio: 4 / 3; border-radius: 12px; background: var(--azul-hondo); object-fit: cover; }
 

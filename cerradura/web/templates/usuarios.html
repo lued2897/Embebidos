@@ -1,19 +1,25 @@
 {% extends "base.html" %}
 {% block titulo %}Usuarios{% endblock %}
 {% block contenido %}
-<div class="rejilla mitades">
+<div class="registro" id="registro" role="status" aria-live="polite" hidden><b id="registro-titulo"></b><span id="registro-texto"></span></div>
 <section class="tarjeta">
   <h2>Usuarios registrados</h2>
-  <div class="tabla angosta"><table>
+  <div class="tabla angosta usuarios"><table>
     <tr><th>Nombre</th><th>Tarjeta</th><th>PIN</th><th>Huella</th><th></th></tr>
     {% for u in usuarios %}<tr>
-      <td>{{ u.nombre }}</td><td>{{ u.rfid_uid or '—' }}</td><td>{{ 'sí' if u.tiene_pin else '—' }}</td>
-      <td>{{ u.huella_id if u.huella_id is not none else '—' }}</td>
-      <td><form method="post" action="{{ url_for('usuarios_eliminar', nombre=u.nombre) }}" onsubmit="return confirm('¿Eliminar a {{ u.nombre }}?')">
+      <td>{{ u.nombre }}</td>
+      <td><span class="celda">{{ u.rfid_uid or '—' }}
+        <button class="enlace" data-usuario="{{ u.nombre }}" data-metodo="tarjeta">{{ 'Cambiar' if u.rfid_uid else 'Registrar' }}</button></span></td>
+      <td>{{ 'sí' if u.tiene_pin else '—' }}</td>
+      <td><span class="celda">{{ u.huella_id if u.huella_id is not none else '—' }}
+        <button class="enlace" data-usuario="{{ u.nombre }}" data-metodo="huella">{{ 'Cambiar' if u.huella_id is not none else 'Registrar' }}</button></span></td>
+      <td><form method="post" action="{{ url_for('usuarios_eliminar', nombre=u.nombre) }}" onsubmit="return confirm('¿Eliminar a {{ u.nombre }}? También se borra su huella del sensor.')">
         <input type="hidden" name="csrf" value="{{ csrf() }}"><button class="peligro">Eliminar</button></form></td>
-    </tr>{% endfor %}
+    </tr>{% else %}<tr><td colspan="5" class="suave">Todavía no hay usuarios.</td></tr>{% endfor %}
   </table></div>
+  <p class="suave">La tarjeta y la huella se registran en el momento: al pulsar Registrar tiene 30 s para acercar la tarjeta o poner el dedo, siguiendo el LCD.</p>
 </section>
+<div class="rejilla mitades separada">
 <section class="tarjeta">
   <h2>Agregar usuario</h2>
   <form method="post" class="formulario">
@@ -24,5 +30,58 @@
     <div><button class="boton azul">Agregar</button></div>
   </form>
 </section>
+{% if usuarios %}
+<section class="tarjeta">
+  <h2>Cambiar PIN</h2>
+  <form method="post" class="formulario" id="form-pin">
+    <input type="hidden" name="csrf" value="{{ csrf() }}">
+    <div class="campo"><label for="pin-usuario">Usuario</label>
+      <select id="pin-usuario">{% for u in usuarios %}<option>{{ u.nombre }}</option>{% endfor %}</select></div>
+    <div class="campo"><label for="pin-nuevo">PIN nuevo</label>
+      <input id="pin-nuevo" name="pin" inputmode="numeric" autocomplete="off" required></div>
+    <div><button class="boton azul">Guardar PIN</button></div>
+  </form>
+</section>
+{% endif %}
 </div>
+<script>
+const CSRF = "{{ csrf() }}";
+const $ = id => document.getElementById(id);
+const formPin = $("form-pin");
+if (formPin) formPin.onsubmit = () => {
+  formPin.action = "/usuarios/" + encodeURIComponent($("pin-usuario").value) + "/pin";
+};
+function aviso(clase, titulo, texto) {
+  $("registro").className = "registro " + clase; $("registro").hidden = false;
+  $("registro-titulo").textContent = titulo; $("registro-texto").textContent = texto;
+}
+function botones(apagados) { document.querySelectorAll("[data-metodo]").forEach(b => b.disabled = apagados); }
+document.querySelectorAll("[data-metodo]").forEach(b => b.onclick = () => registrar(b.dataset.usuario, b.dataset.metodo));
+async function registrar(usuario, metodo) {
+  botones(true);
+  let r;
+  try {
+    r = await (await fetch("/api/registro", {method: "POST", body: JSON.stringify({usuario, metodo}),
+      headers: {"X-CSRF": CSRF, "Content-Type": "application/json"}})).json();
+  } catch (e) { r = {ok: false, error: "sin conexión con la Raspberry"}; }
+  if (!r.ok) { aviso("error", "No se pudo iniciar el registro", r.error || r.mensaje); botones(false); return; }
+  const pide = metodo === "tarjeta" ? "Acerque la tarjeta al lector" : "Ponga el dedo en el sensor y siga el LCD";
+  const reloj = setInterval(async () => {
+    const e = await (await fetch(`/api/registro/${r.id}`, {cache: "no-store"})).json();
+    if (e.ok && e.estado === "esperando") {
+      aviso("esperando", `Registrando ${metodo} de ${usuario}`, `${pide}. Quedan ${e.segundos} s.`);
+      return;
+    }
+    clearInterval(reloj);
+    if (e.ok && e.estado === "ok") {
+      aviso("ok", "Listo", metodo === "tarjeta" ? `Tarjeta ${e.valor} guardada para ${usuario}.`
+                                                : `Huella guardada en la posición ${e.valor} para ${usuario}.`);
+      setTimeout(() => location.reload(), 1500);
+    } else {
+      aviso("error", "No se registró", e.mensaje || e.error);
+      botones(false);
+    }
+  }, 500);
+}
+</script>
 {% endblock %}

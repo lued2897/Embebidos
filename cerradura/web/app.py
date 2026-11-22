@@ -231,19 +231,58 @@ def usuarios_agregar():
         if pin:
             db.asignar(con(), nombre, "pin_hash", db.hash_pin(pin))
         db.log(con(), "web", "usuario creado", session["usuario"], nombre)
-        flash(f"Usuario {nombre} creado. Tarjeta y huella se registran con admin.py.")
+        flash(f"Usuario {nombre} creado. Registre su tarjeta o su huella con los botones de la tabla.")
     except sqlite3.IntegrityError:
         flash("Ese nombre o PIN ya está registrado.")
+    return redirect(url_for("usuarios"))
+
+
+@app.post("/usuarios/<nombre>/pin")
+@requiere_sesion
+def usuarios_pin(nombre):
+    pin = request.form.get("pin", "").strip()
+    if not (pin.isdigit() and config.PIN_MIN <= len(pin) <= config.PIN_MAX):
+        flash(f"El PIN debe tener de {config.PIN_MIN} a {config.PIN_MAX} dígitos.")
+        return redirect(url_for("usuarios"))
+    try:
+        if db.asignar(con(), nombre, "pin_hash", db.hash_pin(pin)):
+            db.log(con(), "web", "PIN cambiado", session["usuario"], nombre)
+            flash(f"PIN de {nombre} guardado.")
+    except sqlite3.IntegrityError:
+        flash("Ese PIN ya lo tiene otro usuario.")
     return redirect(url_for("usuarios"))
 
 
 @app.post("/usuarios/<nombre>/eliminar")
 @requiere_sesion
 def usuarios_eliminar(nombre):
-    if db.eliminar_usuario(con(), nombre):
-        db.log(con(), "web", "usuario eliminado", session["usuario"], nombre)
-        flash(f"Usuario {nombre} eliminado.")
+    # La baja la hace el control: borra al usuario y manda borrar su huella del AS608.
+    r = ipc.enviar({"tipo": "baja", "usuario": nombre, "admin": session["usuario"]})
+    if r.get("ok"):
+        flash(f"Usuario {nombre} eliminado, con su tarjeta, PIN y huella.")
+    else:
+        error = r.get("error") or ""
+        if not error or "Errno" in error or "sin respuesta" in error:
+            error = "el proceso de control no responde"
+        flash(f"No se eliminó a {nombre}: {error}.")
     return redirect(url_for("usuarios"))
+
+
+@app.post("/api/registro")
+@requiere_sesion
+def api_registro():
+    """Pide al control registrar la tarjeta o la huella de un usuario (30 s para hacerlo)."""
+    datos = request.get_json(silent=True) or request.form
+    r = ipc.enviar({"tipo": "registrar", "usuario": datos.get("usuario"), "metodo": datos.get("metodo")})
+    if r.get("ok"):
+        db.log(con(), "web", f"registro de {datos.get('metodo')} iniciado", session["usuario"], datos.get("usuario"))
+    return jsonify(r), (200 if r.get("ok") else 409)
+
+
+@app.get("/api/registro/<int:rid>")
+@requiere_sesion
+def api_registro_estado(rid):
+    return jsonify(ipc.enviar({"tipo": "registro_estado", "id": rid}, timeout=1.0))
 
 
 def main():
