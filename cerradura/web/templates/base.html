@@ -13,6 +13,9 @@
   <div class="barra"><nav>
     <a class="marca" href="{{ url_for('panel') }}">{{ candado() }}<span><b>Cerradura</b><small>Equipo 8 · FSE</small></span></a>
     <a href="{{ url_for('panel') }}" class="{{ 'activo' if request.endpoint == 'panel' }}">Panel</a>
+    {% set n = n_alertas() %}
+    <a href="{{ url_for('alertas') }}" class="{{ 'activo' if request.endpoint == 'alertas' }}">Alertas
+      <span class="insignia" id="insignia"{% if not n %} hidden{% endif %}>{{ n }}</span></a>
     <a href="{{ url_for('historial') }}" class="{{ 'activo' if request.endpoint == 'historial' }}">Historial</a>
     <a href="{{ url_for('usuarios') }}" class="{{ 'activo' if request.endpoint == 'usuarios' }}">Usuarios</a>
     <form method="post" action="{{ url_for('logout') }}">

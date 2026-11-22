@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block titulo %}Alertas{% endblock %}
+{% block contenido %}
+<section class="tarjeta">
+  <div class="encabezado">
+    <h2>Alertas · últimas {{ alertas|length }}</h2>
+    {% if alertas|selectattr("vista", "equalto", 0)|list %}
+    <form method="post" action="{{ url_for('alertas_vistas') }}">
+      <input type="hidden" name="csrf" value="{{ csrf() }}">
+      <input type="hidden" name="hasta_id" value="{{ alertas[0].id }}">
+      <button class="boton azul chico">Marcar todas como vistas</button>
+    </form>{% endif %}
+  </div>
+  <div class="tabla"><table>
+    <tr><th>Fecha</th><th>Origen</th><th>Alerta</th><th>Nivel</th><th>Estado</th></tr>
+    {% for a in alertas %}<tr class="{{ 'nueva' if not a.vista }}"><td>{{ a.fecha }}</td><td>{{ a.origen }}</td>
+      <td>{{ a.mensaje }}</td><td><span class="nivel nivel-{{ a.nivel }}">{{ 'crítica' if a.nivel == 'critica' else a.nivel }}</span></td>
+      <td>{{ 'vista' if a.vista else 'nueva' }}</td></tr>
+    {% else %}<tr><td colspan="5" class="suave">Todavía no hay alertas.</td></tr>{% endfor %}
+  </table></div>
+</section>
+{% endblock %}

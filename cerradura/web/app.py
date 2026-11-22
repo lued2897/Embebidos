@@ -3,7 +3,7 @@
 
 - Inicio de sesión con contraseña (scrypt) y sesión que caduca tras 10 min sin actividad.
 - Bloqueo de 60 s tras 5 intentos de login fallidos por dirección IP.
-- Estado de la puerta (se consulta cada 500 ms), apertura remota, video en vivo,
+- Estado de la puerta (se consulta cada 500 ms), alertas, apertura remota, video en vivo,
   historial de eventos y administración de usuarios.
 - Nunca toca el hardware: la apertura y el estado se piden al proceso de control
   por el mismo socket FIFO que usan las entradas (bitácora clases 9 y 11).
@@ -95,7 +95,8 @@ def token_csrf():
 
 @app.context_processor
 def plantilla_globales():
-    return {"csrf": token_csrf, "estado_ms": config.WEB_ESTADO_MS}
+    return {"csrf": token_csrf, "estado_ms": config.WEB_ESTADO_MS,
+            "n_alertas": lambda: db.alertas_pendientes(con()) if "usuario" in session else 0}
 
 
 @app.before_request
@@ -129,7 +130,8 @@ def login():
         if fallos >= config.WEB_MAX_INTENTOS:
             with _fallos_lock:
                 _fallos_login[ip] = (0, time.monotonic() + config.WEB_BLOQUEO_S)
-            db.log(con(), "web", "login bloqueado", usuario or None, f"ip {ip}, {fallos} intentos")
+            db.alerta(con(), "web", f"login bloqueado para la IP {ip} tras {fallos} intentos"
+                      + (f" (usuario {usuario})" if usuario else ""), "aviso")
             flash(f"Demasiados intentos. Espere {config.WEB_BLOQUEO_S} s.")
         else:
             with _fallos_lock:
@@ -149,8 +151,8 @@ def logout():
 @app.get("/")
 @requiere_sesion
 def panel():
-    return render_template("panel.html", usuario=session["usuario"],
-                           logs=db.ultimos_logs(con(), 10), camara=camara is not None)
+    return render_template("panel.html", usuario=session["usuario"], logs=db.ultimos_logs(con(), 10),
+                           alertas=db.ultimas_alertas(con(), 5, solo_pendientes=True), camara=camara is not None)
 
 
 @app.get("/api/estado")
@@ -158,6 +160,7 @@ def panel():
 def api_estado():
     r = ipc.enviar({"tipo": "estado"}, timeout=1.0)
     r["camara"] = camara.estado() if camara else None
+    r["alertas"] = db.alertas_pendientes(con())       # la página recarga la lista si cambia
     return jsonify(r)
 
 
@@ -174,6 +177,28 @@ def video():
     if not camara:
         abort(404)
     return Response(camara.flujo(), mimetype="multipart/x-mixed-replace; boundary=cuadro")
+
+
+@app.get("/api/alertas")
+@requiere_sesion
+def api_alertas():
+    return jsonify([dict(a) for a in db.ultimas_alertas(con(), 5, solo_pendientes=True)])
+
+
+@app.get("/alertas")
+@requiere_sesion
+def alertas():
+    return render_template("alertas.html", usuario=session["usuario"], alertas=db.ultimas_alertas(con(), 200))
+
+
+@app.post("/alertas/vistas")
+@requiere_sesion
+def alertas_vistas():
+    # Solo hasta la última que vio el administrador: las que llegaron después siguen pendientes.
+    hasta = request.form.get("hasta_id", type=int)
+    n = db.marcar_alertas_vistas(con(), hasta)
+    db.log(con(), "web", "alertas vistas", session["usuario"], f"{n} alertas")
+    return redirect(url_for("panel" if request.form.get("volver") == "panel" else "alertas"))
 
 
 @app.get("/historial")

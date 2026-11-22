@@ -1,0 +1,4 @@
+<ul class="alertas" id="alertas-lista">
+  {% for a in alertas %}<li class="alerta nivel-{{ a.nivel }}"><b>{{ a.mensaje }}</b><span>{{ a.origen }} · {{ a.fecha }}</span></li>
+  {% else %}<li class="vacio">Sin alertas pendientes</li>{% endfor %}
+</ul>

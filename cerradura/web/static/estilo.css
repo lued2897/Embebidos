@@ -121,6 +121,28 @@ tr:hover td { background: #f6f8fc; }
 .etiqueta { font-weight: 800; font-size: 13px; }
 .etiqueta.concedido, .etiqueta.cerrada { color: var(--ok); }
 .etiqueta.denegado, .etiqueta.bloqueo { color: var(--mal); }
+.etiqueta.alerta { color: var(--mal); }
+
+/* alertas */
+.insignia { display: inline-block; min-width: 20px; padding: 0 6px; margin-left: 2px; border-radius: 10px;
+            background: var(--oro); color: var(--azul-hondo); font-size: 12px; font-weight: 900;
+            line-height: 20px; text-align: center; vertical-align: 1px; }
+.insignia[hidden] { display: none; }
+.encabezado { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+.encabezado h2 { margin: 0; }
+.encabezado form { margin: 0; }
+.boton.chico { font-size: 14px; padding: 7px 14px; border-radius: 8px; }
+.alertas { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.alertas .alerta { border: 1px solid var(--borde); border-left: 5px solid var(--oro); border-radius: 10px; padding: 9px 12px;
+          display: flex; justify-content: space-between; gap: 6px 16px; flex-wrap: wrap; }
+.alertas .nivel-critica { border-left-color: var(--mal); background: #fdf3f2; }
+.alertas .nivel-info { border-left-color: var(--azul); }
+.alertas .alerta b { font-weight: 800; }
+.alertas .alerta span { color: var(--suave); font-size: 13px; font-variant-numeric: tabular-nums; }
+.alertas .vacio { color: var(--suave); font-size: 14px; }
+.nivel { font-weight: 800; font-size: 13px; }
+.nivel.nivel-critica { color: var(--mal); } .nivel.nivel-aviso { color: var(--oro-hondo); } .nivel.nivel-info { color: var(--azul); }
+tr.nueva td { font-weight: 700; }
 
 /* video */
 .video { display: block; width: 100%; aspect-ratio: 4 / 3; border-radius: 12px; background: var(--azul-hondo); object-fit: cover; }

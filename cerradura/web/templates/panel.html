@@ -17,6 +17,19 @@
   </section>
 </div>
 <section class="tarjeta">
+  <div class="encabezado">
+    <h2>Alertas sin revisar</h2>
+    <form method="post" action="{{ url_for('alertas_vistas') }}" id="vistas"{% if not alertas %} hidden{% endif %}>
+      <input type="hidden" name="csrf" value="{{ csrf() }}">
+      <input type="hidden" name="volver" value="panel">
+      <input type="hidden" name="hasta_id" id="hasta_id" value="{{ alertas[0].id if alertas else '' }}">
+      <button class="boton azul chico">Marcar como vistas</button>
+    </form>
+  </div>
+  {% include "_alertas.html" %}
+  <p><a href="{{ url_for('alertas') }}">Ver todas las alertas</a></p>
+</section>
+<section class="tarjeta">
   <h2>Últimos eventos</h2>
   {% include "_eventos.html" %}
   <p><a href="{{ url_for('historial') }}">Ver historial completo</a></p>
@@ -24,6 +37,19 @@
 <script>
 const CSRF = "{{ csrf() }}";
 const $ = id => document.getElementById(id);
+let alertasMostradas = {{ n_alertas() }};
+const esc = t => String(t).replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+async function recargarAlertas(n) {
+  // Solo se pide la lista cuando cambia el número de pendientes
+  const lista = await (await fetch("/api/alertas", {cache: "no-store"})).json();
+  $("alertas-lista").innerHTML = lista.length
+    ? lista.map(a => `<li class="alerta nivel-${esc(a.nivel)}"><b>${esc(a.mensaje)}</b><span>${esc(a.origen)} · ${esc(a.fecha)}</span></li>`).join("")
+    : '<li class="vacio">Sin alertas pendientes</li>';
+  $("vistas").hidden = !lista.length;
+  if (lista.length) $("hasta_id").value = lista[0].id;
+  $("insignia").textContent = n; $("insignia").hidden = !n;
+  alertasMostradas = n;
+}
 async function estado() {
   try {
     const r = await fetch("/api/estado", {cache: "no-store"});
@@ -34,6 +60,7 @@ async function estado() {
     $("puerta").textContent = e.puerta;
     $("puerta").className = "grande " + (e.puerta === "cerrada" ? "ok" : "mal");
     $("cerradura").textContent = e.desbloqueada ? "abierta" : "cerrada";
+    if (e.alertas !== alertasMostradas) recargarAlertas(e.alertas);
     if (e.camara && $("camara")) $("camara").textContent = e.camara.error ? "Error: " + e.camara.error : "";
   } catch (err) { $("aviso").textContent = "Sin conexión con la Raspberry"; }
 }
