@@ -9,7 +9,7 @@ Acceso con tarjeta RFID, PIN o huella; servomotor por PWM de hardware; LCD de es
 sensor de puerta; app web con video en vivo, apertura remota, alertas, historial, alta y
 baja de usuarios (con tarjeta y/o huella) y respaldos.
 
-![Diagrama de bloques](img/diagrama_v3.jpeg)
+![Diagrama de bloques](img/diagrama_v4.jpeg)
 
 ## Procesos
 
