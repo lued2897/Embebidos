@@ -1,0 +1,253 @@
+
+===== Sistema =====
+$ uname -a
+Linux BERRYGOOD 6.18.39+rpt-rpi-v7 #1 SMP Raspbian 1:6.18.39-1+rpt1 (2026-07-29) armv7l GNU/Linux
+
+$ grep PRETTY_NAME /etc/os-release
+PRETTY_NAME="Raspbian GNU/Linux 13 (trixie)"
+
+$ free -m
+               total        used        free      shared  buff/cache   available
+Mem:             920         379          97          14         502         540
+Swap:            919          27         892
+
+
+===== Arranque (requisito Avance 1: operativo en menos de 60 s) =====
+$ systemd-analyze
+Startup finished in 4.326s (kernel) + 37.948s (userspace) = 42.274s 
+graphical.target reached after 37.831s in userspace.
+
+$ systemd-analyze blame | grep cerradura
+
+$ journalctl -b -o short-monotonic -u cerradura-control | grep -m1 'escuchando'
+[   15.747225] BERRYGOOD python[610]: 2026-11-22 17:33:12,154 control control escuchando en /tmp/cerradura_control.sock
+
+$ journalctl -b -o short-monotonic -u cerradura-entradas | grep -m1 'RFID listo'
+[   15.663239] BERRYGOOD python[611]: 2026-11-22 17:33:12,069 entradas RFID listo (VersionReg=0xB2)
+
+$ journalctl -b -o short-monotonic -u cerradura-web | grep -m1 'Running on'
+[   43.856058] BERRYGOOD python[1369]:  * Running on all addresses (0.0.0.0)
+
+
+===== Servicios y prioridades (bitácora clase 8) =====
+$ systemctl is-active cerradura-control cerradura-entradas cerradura-web
+active
+active
+active
+
+$ ps -eo pid,ni,rss,args | grep -E 'control.py|entradas.py|web/app.py|rpicam-vid' | grep -v grep
+10247   0 30296 /opt/cerradura/venv/bin/python web/app.py
+10250 -10 17124 /opt/cerradura/venv/bin/python control.py
+10251  -5 19668 /opt/cerradura/venv/bin/python entradas.py
+15307  10 47388 /usr/bin/rpicam-vid -t 0 -n --codec mjpeg --width 640 --height 480 --framerate 15 -o -
+
+$ ps -L -o tid,ni,comm -p 10250
+  TID  NI COMMAND
+10250 -10 python
+10253  10 python
+10263 -10 python
+10264 -10 python
+
+
+===== IPC (bitácora clase 11): socket y cola de mensajes =====
+$ ls -l /tmp/cerradura_control.sock
+srw-rw---- 1 root root 0 Nov 22 18:41 /tmp/cerradura_control.sock
+
+$ ls -l /dev/mqueue/ && cat /dev/mqueue/cerradura_puerta
+total 0
+-rw------- 1 root root 80 Nov 22 17:33 cerradura_ordenes
+-rw------- 1 root root 80 Nov 22 19:34 cerradura_puerta
+QSIZE:0          NOTIFY:0     SIGNO:0     NOTIFY_PID:0     
+
+$ cat /dev/mqueue/cerradura_ordenes
+QSIZE:0          NOTIFY:0     SIGNO:0     NOTIFY_PID:0     
+
+
+===== Clase 21: drivers del kernel y nodos en /dev =====
+$ lsmod | grep -E 'i2c|spi|bcm2835|unicam|ov5647|videodev' 
+ov5647                 20480  0
+spidev                 20480  2
+bcm2835_codec          49152  0
+bcm2835_unicam_legacy    40960  3
+bcm2835_v4l2           45056  0
+bcm2835_isp            28672  5
+v4l2_dv_timings        36864  1 bcm2835_unicam_legacy
+v4l2_mem2mem           40960  1 bcm2835_codec
+v4l2_fwnode            20480  4 ov5647,bcm2835_unicam_legacy
+v4l2_async             20480  3 v4l2_fwnode,ov5647,bcm2835_unicam_legacy
+bcm2835_mmal_vchiq     36864  3 bcm2835_isp,bcm2835_codec,bcm2835_v4l2
+vc_sm_cma              24576  16 bcm2835_isp,bcm2835_mmal_vchiq
+videobuf2_vmalloc      12288  1 bcm2835_v4l2
+i2c_mux_pinctrl        12288  0
+videobuf2_dma_contig    16384  5 bcm2835_isp,bcm2835_codec,bcm2835_unicam_legacy
+i2c_mux                12288  1 i2c_mux_pinctrl
+videobuf2_v4l2         28672  5 bcm2835_isp,bcm2835_codec,bcm2835_unicam_legacy,bcm2835_v4l2,v4l2_mem2mem
+videodev              294912  15 bcm2835_isp,v4l2_fwnode,ov5647,bcm2835_codec,bcm2835_unicam_legacy,bcm2835_v4l2,v4l2_mem2mem,videobuf2_v4l2,v4l2_async
+videobuf2_common       69632  9 bcm2835_isp,bcm2835_codec,bcm2835_unicam_legacy,videobuf2_dma_contig,videobuf2_vmalloc,videobuf2_memops,bcm2835_v4l2,v4l2_mem2mem,videobuf2_v4l2
+mc                     53248  11 bcm2835_isp,ov5647,bcm2835_codec,videobuf2_common,videodev,bcm2835_unicam_legacy,v4l2_mem2mem,videobuf2_v4l2,v4l2_async
+snd_bcm2835            24576  1
+i2c_bcm2835            12288  3
+spi_bcm2835            16384  0
+i2c_dev                16384  4
+snd_pcm               139264  5 snd_compress,snd_pcm_dmaengine,snd_soc_hdmi_codec,snd_bcm2835,snd_soc_core
+snd                   102400  12 snd_compress,snd_seq,snd_soc_hdmi_codec,snd_timer,snd_seq_device,snd_bcm2835,snd_soc_core,snd_pcm
+
+$ ls -l /dev/i2c-1 /dev/spidev0.0 /dev/gpiochip0 /dev/serial0 /dev/ttyAMA0 /dev/video0
+crw-rw----+ 1 root gpio    254,  0 Nov 22 17:33 /dev/gpiochip0
+crw-rw----  1 root i2c      89,  1 Nov 22 17:33 /dev/i2c-1
+lrwxrwxrwx  1 root root          7 Nov 22 17:33 /dev/serial0 -> ttyAMA0
+crw-rw----  1 root spi     153,  0 Nov 22 17:33 /dev/spidev0.0
+crw-rw----  1 root dialout 204, 64 Nov 22 19:37 /dev/ttyAMA0
+crw-rw----+ 1 root video    81, 13 Nov 22 17:33 /dev/video0
+
+$ readlink -f /dev/serial0
+/dev/ttyAMA0
+
+$ i2cdetect -y 1
+     0  1  2  3  4  5  6  7  8  9  a  b  c  d  e  f
+00:                         -- -- -- -- -- -- -- -- 
+10: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
+20: -- -- -- -- -- -- -- 27 -- -- -- -- -- -- -- -- 
+30: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
+40: 40 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
+50: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
+60: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
+70: -- -- -- -- -- -- -- --                         
+
+$ printf 'I2C1 a %d Hz\n' 0x$(od -An -tx1 /sys/firmware/devicetree/base/soc/i2c@7e804000/clock-frequency | tr -d ' \n')
+I2C1 a 100000 Hz
+
+$ (gpioinfo -c gpiochip0 2>/dev/null || gpioinfo gpiochip0) | grep -E 'line +(5|6|12|13|16|17|19|20|21):'
+	line   5:	"GPIO5"         	output consumer="lg"
+	line   6:	"GPIO6"         	output consumer="lg"
+	line  12:	"GPIO12"        	input bias=pull-up consumer="lg"
+	line  13:	"GPIO13"        	output consumer="lg"
+	line  16:	"GPIO16"        	input bias=pull-up consumer="lg"
+	line  17:	"GPIO17"        	input bias=pull-up edges=both consumer="lg"
+	line  19:	"GPIO19"        	output consumer="lg"
+	line  20:	"GPIO20"        	input bias=pull-up consumer="lg"
+	line  21:	"GPIO21"        	input bias=pull-up consumer="lg"
+
+$ dmesg | grep -iE 'ov5647|unicam|spi|ttyAMA|i2c' | tail -n 15
+[    0.026330] /soc/csi@7e801000: Fixed dependency cycle(s) with /soc/i2c0mux/i2c@1/ov5647@36
+[    0.026429] /soc/i2c0mux/i2c@1/ov5647@36: Fixed dependency cycle(s) with /soc/csi@7e801000
+[    0.027934] /soc/csi@7e801000: Fixed dependency cycle(s) with /soc/i2c0mux/i2c@1/ov5647@36
+[    0.029431] /soc/i2c0mux/i2c@1/ov5647@36: Fixed dependency cycle(s) with /soc/csi@7e801000
+[    2.231254] 3f201000.serial: ttyAMA0 at MMIO 0x3f201000 (irq = 114, base_baud = 0) is a PL011 rev2
+[    9.016956] i2c_dev: i2c /dev entries driver
+[   11.541747] i2c i2c-11: Added multiplexed i2c bus 0
+[   11.542515] /soc/csi@7e801000: Fixed dependency cycle(s) with /soc/i2c0mux/i2c@1/ov5647@36
+[   11.542614] /soc/i2c0mux/i2c@1/ov5647@36: Fixed dependency cycle(s) with /soc/csi@7e801000
+[   11.542833] i2c i2c-11: Added multiplexed i2c bus 10
+
+$ rpicam-hello --list-cameras 2>&1 | head -n 8
+Available cameras
+-----------------
+0 : ov5647 [2592x1944 10-bit GBRG] (/base/soc/i2c0mux/i2c@1/ov5647@36)
+    Modes: 'SGBRG10_CSI2P' : 640x480 [30.00 fps - (65519, 65529)/65535x65535 crop]
+                             1296x972 [30.00 fps - (65519, 65529)/65535x65535 crop]
+                             1920x1080 [30.00 fps - (65519, 65529)/65535x65535 crop]
+                             2592x1944 [30.00 fps - (65519, 65529)/65535x65535 crop]
+
+
+
+===== Clase 20: registros del PCA9685 (enteros de 8 bits por I2C) =====
+$ i2cget -y 1 0x40 0x00
+0x20
+
+PRE_SCALE (0xFE): debe ser 0x79 = 121 para 50 Hz
+$ i2cget -y 1 0x40 0xFE
+0x79
+
+Canal 15: LED15_OFF_L (0x44) y LED15_OFF_H (0x45); 205 = 0x00CD cerrado, 410 = 0x019A abierto
+$ i2cget -y 1 0x40 0x44; i2cget -y 1 0x40 0x45
+0xcd
+0x00
+
+
+===== Clase 20: VersionReg del RC522 por SPI (lectura directa, sin reiniciar el chip) =====
+$ /opt/cerradura/venv/bin/python -c "import spidev; s=spidev.SpiDev(); s.open(0,0); s.max_speed_hz=1000000; print(hex(s.xfer2([0x80|(0x37<<1),0])[1]))"
+0xb2
+
+
+===== Clase 20: el pin del reed cambia sin que el programa lo escriba (equivalente a volatile) =====
+Acerca y aleja el imán durante los próximos 6 s
+17: ip    -- | lo // GPIO17 = input
+17: ip    -- | lo // GPIO17 = input
+17: ip    -- | hi // GPIO17 = input
+17: ip    -- | lo // GPIO17 = input
+17: ip    -- | lo // GPIO17 = input
+17: ip    -- | lo // GPIO17 = input
+
+===== Medición: latencia credencial -> servo (requisito Avance 1: menos de 3 s) =====
+$ cd /opt/cerradura && /opt/cerradura/venv/bin/python admin.py medir
+Aperturas medidas: 200
+Mediana: 2.0 ms   Máxima: 507.5 ms   Mínima: 1.1 ms
+  huella  n=68   mediana   376.0 ms   máx   507.5 ms
+  pin     n=21   mediana     2.1 ms   máx     3.6 ms
+  remoto  n=89   mediana     1.5 ms   máx     2.4 ms
+  rfid    n=22   mediana     1.9 ms   máx    14.3 ms
+Requisito del Avance 1: < 3000 ms -> CUMPLE
+
+$ cd /opt/cerradura && /opt/cerradura/venv/bin/python admin.py estado
+{'ok': True, 'puerta': 'cerrada', 'desbloqueada': False, 'bloqueado': False, 'ms': 0.2}
+
+
+===== Base de datos =====
+$ ls -l /var/lib/cerradura
+total 4208
+-rw-r--r-- 1 root root  118784 Nov 22 19:16 cerradura.db
+-rw-r--r-- 1 root root   32768 Nov 22 19:37 cerradura.db-shm
+-rw-r--r-- 1 root root 4124152 Nov 22 19:37 cerradura.db-wal
+-rw-r--r-- 1 root root    1176 Nov 22 17:44 https.crt
+-rw------- 1 root root    1704 Nov 22 17:44 https.key
+-rw------- 1 root root      32 Nov  3 20:53 pepper.key
+-rw-r--r-- 1 root root      58 Nov 22 19:23 persistencia.json
+drwx------ 6 root root    4096 Nov 22 17:50 respaldos
+-rw------- 1 root root      32 Nov  8 20:15 web.key
+
+$ /opt/cerradura/venv/bin/python -c "import sys; sys.path.insert(0,'/opt/cerradura'); import db; c=db.conectar(); print(c.execute('select count(*) from logs').fetchone()[0], 'eventos'); print(c.execute('select count(*) from usuarios').fetchone()[0], 'usuarios')"
+1404 eventos
+4 usuarios
+
+
+===== Avance 4: alertas =====
+$ /opt/cerradura/venv/bin/python -c "import sys; sys.path.insert(0,'/opt/cerradura'); import db; c=db.conectar(); print(db.alertas_pendientes(c), 'alertas sin revisar'); [print(a['fecha'], a['nivel'], a['origen'], a['mensaje']) for a in db.ultimas_alertas(c, 10)]"
+7 alertas sin revisar
+2026-11-22 19:37:13 critica puerta abierta sin autorización
+2026-11-22 19:37:12 critica puerta abierta sin autorización
+2026-11-22 19:37:11 critica puerta abierta sin autorización
+2026-11-22 19:37:10 critica puerta abierta sin autorización
+2026-11-22 19:37:09 critica puerta abierta sin autorización
+2026-11-22 19:37:09 critica puerta abierta sin autorización
+2026-11-22 19:19:32 critica sistema bloqueo temporal: 5 intentos fallidos seguidos
+2026-11-22 16:23:55 critica puerta abierta sin autorización
+2026-11-22 16:19:38 critica puerta abierta sin autorización
+2026-11-22 14:04:17 critica puerta abierta sin autorización
+
+
+===== Avance 4: respaldos (sin UPS, protegen de una microSD dañada) =====
+$ systemctl list-timers cerradura-respaldo.timer --no-pager
+NEXT                        LEFT LAST                        PASSED UNIT                     ACTIVATES
+Mon 2026-11-23 03:39:41 CST   8h Sun 2026-11-22 15:55:23 CST      - cerradura-respaldo.timer cerradura-respaldo.service
+
+1 timers listed.
+Pass --all to see loaded but inactive timers, too.
+
+$ findmnt /mnt/respaldo || echo 'sin memoria USB'
+TARGET        SOURCE    FSTYPE OPTIONS
+/mnt/respaldo /dev/sda1 ext4   rw,noatime
+
+$ cd /opt/cerradura && /opt/cerradura/venv/bin/python admin.py respaldos
+respaldo_20261122_175016     tarjeta    4 usuarios    879 eventos   /var/lib/cerradura/respaldos/respaldo_20261122_175016
+respaldo_20261122_175016     USB        4 usuarios    879 eventos   /mnt/respaldo/cerradura/respaldo_20261122_175016
+respaldo_20261122_163710     tarjeta    4 usuarios    870 eventos   /var/lib/cerradura/respaldos/respaldo_20261122_163710
+respaldo_20261122_163710     USB        4 usuarios    870 eventos   /mnt/respaldo/cerradura/respaldo_20261122_163710
+respaldo_20261122_160648     tarjeta    4 usuarios    823 eventos   /var/lib/cerradura/respaldos/respaldo_20261122_160648
+respaldo_20261122_160648     USB        4 usuarios    823 eventos   /mnt/respaldo/cerradura/respaldo_20261122_160648
+respaldo_20261122_160033     tarjeta    4 usuarios    820 eventos   /var/lib/cerradura/respaldos/respaldo_20261122_160033
+
+$ journalctl -u cerradura-respaldo -n 5 --no-pager
+-- No entries --
+
+Evidencia guardada en evidencia_2026-11-22_1937.log
